@@ -1,6 +1,12 @@
 {
   "compilerOptions": {
     "target": "ES2024",
+    "baseUrl": ".",
+    "paths": {
+      "props-fuzzing": ["../../src/index.ts"],
+      "props-fuzzing/svelte": ["../../src/svelte.ts"],
+      "props-fuzzing/vue": ["../../src/vue.ts"]
+    },
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "strict": true,

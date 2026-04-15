@@ -1,28 +1,31 @@
-import { JSDOM } from "jsdom";
+import { Window } from "happy-dom";
 
 export type SharedDomOptions = {
   html?: string;
   url?: string;
 };
 
-const installDomGlobals = (dom: JSDOM) => {
-  const { window } = dom;
+const installDomGlobals = (window: Window) => {
   const bindings: Record<string, unknown> = {
     window,
     self: window,
     document: window.document,
     navigator: window.navigator,
+    location: window.location,
     HTMLElement: window.HTMLElement,
     Element: window.Element,
     Node: window.Node,
     Text: window.Text,
+    Comment: window.Comment,
     Event: window.Event,
     CustomEvent: window.CustomEvent,
     EventTarget: window.EventTarget,
     MutationObserver: window.MutationObserver,
+    Document: window.Document,
     DocumentFragment: window.DocumentFragment,
     SVGElement: window.SVGElement,
     ShadowRoot: window.ShadowRoot,
+    DOMParser: window.DOMParser,
     getComputedStyle: window.getComputedStyle.bind(window),
     requestAnimationFrame:
       window.requestAnimationFrame?.bind(window) ??
@@ -48,9 +51,10 @@ const installDomGlobals = (dom: JSDOM) => {
 };
 
 export const createIsolatedDom = (options: SharedDomOptions = {}) => {
-  const dom = new JSDOM(options.html ?? "<!doctype html><html><body></body></html>", {
+  const window = new Window({
     url: options.url ?? "http://localhost/",
   });
-  installDomGlobals(dom);
-  return dom;
+  window.document.write(options.html ?? "<!doctype html><html><body></body></html>");
+  installDomGlobals(window);
+  return { window };
 };

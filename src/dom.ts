@@ -3,7 +3,7 @@ import type * as React from "react";
 import { analyzePropsDescriptor } from "./analyzer.js";
 import type { ObjectDescriptor, PropertyDescriptor, TypeDescriptor } from "./descriptor.js";
 import type { ComponentRenderStrategy } from "./fuzz.js";
-import { createIsolatedDom } from "./jsdom.js";
+import { createIsolatedDom } from "./happy_dom.js";
 
 type SourceOptions = {
   sourcePath: string | URL;
@@ -146,7 +146,7 @@ export const createDomRender = <Props = any>(
 
       const target = dom.window.document.createElement("div");
       dom.window.document.body.append(target);
-      const root = ReactDomClient.createRoot(target);
+      const root = ReactDomClient.createRoot(target as unknown as Element);
 
       try {
         await act(async () => {

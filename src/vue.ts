@@ -1,5 +1,5 @@
 import type { ComponentRenderStrategy } from "./fuzz.js";
-import { createIsolatedDom } from "./jsdom.js";
+import { createIsolatedDom } from "./happy_dom.js";
 
 export type VueAppLike = {
   config: unknown;
@@ -38,7 +38,7 @@ export const createVueDomRender = <Component = unknown, Props = unknown>(
 
       let mounted = false;
       try {
-        app.mount(target);
+        app.mount(target as unknown as Element);
         mounted = true;
         await nextTick();
       } finally {

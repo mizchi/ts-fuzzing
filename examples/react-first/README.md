@@ -1,16 +1,16 @@
 # React First Example
 
-`props-fuzzing` を React 起点で使う最小サンプル。`examples/react-first/test/react-first.example.test.tsx` が executable docs になっていて、主要ユースケースを追える。
+This is a small React-first sample project for `props-fuzzing`. The executable docs live in [react-first.example.test.tsx](/Users/mz/ghq/github.com/mizchi/props-fuzzing/examples/react-first/test/react-first.example.test.tsx:1), which covers the main use cases:
 
-- `sampleProps()` で props 値を先に眺める
-- `fuzzReactComponent()` で通常の property-based fuzzing を回す
-- `createDomRender()` で `useEffect` 由来の例外を拾う
-- `createDomRender({ providers })` で Provider props も一緒に fuzz する
-- `samplePropsFromSchema()` で Zod schema から直接値を作る
-- `fuzzReactComponentGuided()` で corpus を保存しながら guided fuzzing を回す
-- `quickCheckReactComponent()` で boundary case を回す
+- inspect generated values with `sampleProps()`
+- run standard property-based fuzzing with `fuzzReactComponent()`
+- catch mount-time failures with `createDomRender()`
+- fuzz provider props with `createDomRender({ providers })`
+- generate values directly from Zod with `samplePropsFromSchema()`
+- persist a corpus with `fuzzReactComponentGuided()`
+- run boundary-focused checks with `quickCheckReactComponent()`
 
-このフォルダは repo 内でそのまま再現できる sample project として `package.json` と `tsconfig.json` も置いている。example test 自体の import は consumer app と同じ `props-fuzzing` で統一してあり、repo 内では Vitest alias で local source に解決する。依存関係は `file:../..` なので、このフォルダ単体で `pnpm install` すれば root のライブラリ実装を使って再現できる。
+This folder is designed to be runnable inside the repository. It includes its own `package.json`, `tsconfig.json`, and `vitest.config.ts`, while resolving `props-fuzzing` to the local source tree through aliases.
 
 ## Install
 
@@ -18,24 +18,24 @@
 pnpm install
 ```
 
-前提:
+Requirements:
 
 - Node.js `24+`
 - ESM (`"type": "module"`)
-- example 単体の `pnpm typecheck` は `src/` を対象にする
-- 他リポジトリへコピーする場合は `props-fuzzing` の dependency spec を公開先に合わせて差し替える
+- `pnpm typecheck` in this example targets `src/`
+- if you copy this example into another repository, replace the local alias setup with the published `props-fuzzing` package
 
 ## Run
 
-repo 内では次で example も含めて検証される。
-
-```bash
-pnpm vitest run
-```
-
-このフォルダを consumer app として切り出すなら、依存関係を install した上で次を実行する。
+From this folder:
 
 ```bash
 pnpm test
 pnpm typecheck
+```
+
+From the repository root, the example is also covered by the main test suite:
+
+```bash
+pnpm test
 ```

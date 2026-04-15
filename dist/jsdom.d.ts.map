@@ -1,1 +1,0 @@
-{"version":3,"file":"jsdom.d.ts","sourceRoot":"","sources":["../src/jsdom.ts"],"names":[],"mappings":"AAAA,OAAO,EAAE,KAAK,EAAE,MAAM,OAAO,CAAC;AAE9B,MAAM,MAAM,gBAAgB,GAAG;IAC7B,IAAI,CAAC,EAAE,MAAM,CAAC;IACd,GAAG,CAAC,EAAE,MAAM,CAAC;CACd,CAAC;AA4CF,eAAO,MAAM,iBAAiB,GAAI,UAAS,gBAAqB,UAM/D,CAAC"}
