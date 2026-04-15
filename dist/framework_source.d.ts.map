@@ -1,0 +1,1 @@
+{"version":3,"file":"framework_source.d.ts","sourceRoot":"","sources":["../src/framework_source.ts"],"names":[],"mappings":"AASA,KAAK,cAAc,GAAG;IACpB,aAAa,CAAC,EAAE,MAAM,CAAC;IACvB,UAAU,EAAE,MAAM,CAAC;IACnB,WAAW,CAAC,EAAE,MAAM,CAAC;IACrB,iBAAiB,CAAC,EAAE,MAAM,CAAC;CAC5B,CAAC;AAwTF,eAAO,MAAM,sBAAsB,GAAI,YAAY,MAAM,KAAG,cAAc,GAAG,SAQ5E,CAAC"}

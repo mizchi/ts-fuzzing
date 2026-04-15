@@ -1,5 +1,5 @@
-import React, { type ReactNode } from "react";
-import type { ReactComponentRenderStrategy } from "./fuzz.js";
+import type * as React from "react";
+import type { ComponentRenderStrategy } from "./fuzz.js";
 type SourceOptions = {
     sourcePath: string | URL;
     exportName?: string;
@@ -15,9 +15,10 @@ export type DomRenderOptions = {
     providers?: DomRenderProvider[];
     url?: string;
     wrapper?: React.ComponentType<{
-        children?: ReactNode;
+        children?: React.ReactNode;
     }>;
 };
-export declare const createDomRender: <Props = any>(options?: DomRenderOptions) => ReactComponentRenderStrategy<Props>;
+export declare const createDomRender: <Props = any>(options?: DomRenderOptions) => ComponentRenderStrategy<React.ComponentType<Props>, Props>;
+export declare const createReactDomRender: <Props = any>(options?: DomRenderOptions) => ComponentRenderStrategy<React.ComponentType<Props>, Props>;
 export {};
 //# sourceMappingURL=dom.d.ts.map

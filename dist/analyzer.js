@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import ts from "typescript";
+import { prepareFrameworkSource } from "./framework_source.js";
 const DEFAULT_CONFIG_OPTIONS = {
     jsx: ts.JsxEmit.ReactJSX,
     module: ts.ModuleKind.NodeNext,
@@ -58,6 +59,42 @@ const parseConfig = (sourcePath) => {
             ...parsed.options,
         },
     };
+};
+const createProgram = (fileNames, compilerOptions, virtualFile) => {
+    if (!virtualFile) {
+        return ts.createProgram({
+            options: compilerOptions,
+            rootNames: fileNames,
+        });
+    }
+    const host = ts.createCompilerHost(compilerOptions, true);
+    const normalizedVirtualPath = path.resolve(virtualFile.path);
+    const originalFileExists = host.fileExists.bind(host);
+    const originalReadFile = host.readFile.bind(host);
+    const originalGetSourceFile = host.getSourceFile.bind(host);
+    host.fileExists = (fileName) => {
+        if (path.resolve(fileName) === normalizedVirtualPath) {
+            return true;
+        }
+        return originalFileExists(fileName);
+    };
+    host.readFile = (fileName) => {
+        if (path.resolve(fileName) === normalizedVirtualPath) {
+            return virtualFile.sourceText;
+        }
+        return originalReadFile(fileName);
+    };
+    host.getSourceFile = (fileName, languageVersion, onError, shouldCreateNewSourceFile) => {
+        if (path.resolve(fileName) === normalizedVirtualPath) {
+            return ts.createSourceFile(fileName, virtualFile.sourceText, languageVersion, true, ts.ScriptKind.TS);
+        }
+        return originalGetSourceFile(fileName, languageVersion, onError, shouldCreateNewSourceFile);
+    };
+    return ts.createProgram({
+        host,
+        options: compilerOptions,
+        rootNames: fileNames,
+    });
 };
 const resolveSymbol = (checker, symbol) => {
     if ((symbol.flags & ts.SymbolFlags.Alias) !== 0) {
@@ -327,35 +364,74 @@ const findPropsType = (checker, sourceFile, options) => {
         throw new Error(`declaration not found: ${options.exportName}`);
     }
     const componentType = checker.getTypeOfSymbolAtLocation(componentSymbol, declaration);
-    const signature = componentType.getCallSignatures()[0];
-    if (!signature) {
-        throw new Error(`component is not callable: ${options.exportName}`);
+    const callSignature = componentType.getCallSignatures()[0];
+    const callPropsSymbol = callSignature?.getParameters()[0];
+    if (callPropsSymbol) {
+        const propsDeclaration = callPropsSymbol.valueDeclaration ?? callPropsSymbol.getDeclarations()?.[0] ?? declaration;
+        return checker.getTypeOfSymbolAtLocation(callPropsSymbol, propsDeclaration);
     }
-    const propsSymbol = signature.getParameters()[0];
-    if (!propsSymbol) {
+    const directPropsSymbol = componentType.getProperty("$props");
+    if (directPropsSymbol) {
+        const propsDeclaration = directPropsSymbol.valueDeclaration ?? directPropsSymbol.getDeclarations()?.[0] ?? declaration;
+        return checker.getTypeOfSymbolAtLocation(directPropsSymbol, propsDeclaration);
+    }
+    const constructSignature = componentType.getConstructSignatures()[0];
+    if (constructSignature) {
+        const instanceType = constructSignature.getReturnType();
+        const instancePropsSymbol = instanceType.getProperty("$props");
+        if (instancePropsSymbol) {
+            const propsDeclaration = instancePropsSymbol.valueDeclaration ??
+                instancePropsSymbol.getDeclarations()?.[0] ??
+                declaration;
+            return checker.getTypeOfSymbolAtLocation(instancePropsSymbol, propsDeclaration);
+        }
+        const constructorOptionsSymbol = constructSignature.getParameters()[0];
+        if (constructorOptionsSymbol) {
+            const optionsDeclaration = constructorOptionsSymbol.valueDeclaration ??
+                constructorOptionsSymbol.getDeclarations()?.[0] ??
+                declaration;
+            const constructorOptionsType = checker.getTypeOfSymbolAtLocation(constructorOptionsSymbol, optionsDeclaration);
+            const propsSymbol = constructorOptionsType.getProperty("props");
+            if (propsSymbol) {
+                const propsDeclaration = propsSymbol.valueDeclaration ?? propsSymbol.getDeclarations()?.[0] ?? optionsDeclaration;
+                return checker.getTypeOfSymbolAtLocation(propsSymbol, propsDeclaration);
+            }
+        }
+    }
+    if (callSignature && !callPropsSymbol) {
         return checker.getNeverType();
     }
-    const propsDeclaration = propsSymbol.valueDeclaration ?? propsSymbol.getDeclarations()?.[0] ?? declaration;
-    return checker.getTypeOfSymbolAtLocation(propsSymbol, propsDeclaration);
+    throw new Error(`component props could not be inferred: ${options.exportName}. pass propsTypeName for non-React components`);
 };
 export const analyzePropsDescriptor = (options) => {
     const sourcePath = path.resolve(options.sourcePath);
-    const { fileNames, options: compilerOptions } = parseConfig(sourcePath);
-    const program = ts.createProgram({
-        options: compilerOptions,
-        rootNames: fileNames,
-    });
+    const preparedSource = prepareFrameworkSource(sourcePath);
+    const programSourcePath = preparedSource?.virtualPath ?? sourcePath;
+    const { fileNames, options: compilerOptions } = parseConfig(programSourcePath);
+    const rootNames = fileNames.includes(programSourcePath)
+        ? fileNames
+        : [...fileNames, programSourcePath];
+    const program = createProgram(rootNames, compilerOptions, preparedSource?.virtualPath && preparedSource.virtualSourceText
+        ? {
+            path: preparedSource.virtualPath,
+            sourceText: preparedSource.virtualSourceText,
+        }
+        : undefined);
     const diagnostics = ts.getPreEmitDiagnostics(program);
     const hardErrors = diagnostics.filter((diagnostic) => diagnostic.category === ts.DiagnosticCategory.Error);
     if (hardErrors.length > 0) {
         throw new Error(formatDiagnostics(hardErrors));
     }
-    const sourceFile = program.getSourceFile(sourcePath);
+    const sourceFile = program.getSourceFile(programSourcePath);
     if (!sourceFile) {
-        throw new Error(`source file not found: ${sourcePath}`);
+        throw new Error(`source file not found: ${programSourcePath}`);
     }
     const checker = program.getTypeChecker();
-    const propsType = findPropsType(checker, sourceFile, options);
+    const propsType = findPropsType(checker, sourceFile, {
+        ...options,
+        propsTypeName: preparedSource?.propsTypeName ?? options.propsTypeName,
+        sourcePath: programSourcePath,
+    });
     return describeType(propsType, sourceFile, {
         checker,
         pending: new Set(),

@@ -1,8 +1,6 @@
-import { cleanup, render as rtlRender } from "@testing-library/react";
 import { fileURLToPath } from "node:url";
-import { JSDOM } from "jsdom";
-import { createElement } from "react";
 import { analyzePropsDescriptor } from "./analyzer.js";
+import { createIsolatedDom } from "./jsdom.js";
 const normalizePath = (sourcePath) => {
     return sourcePath instanceof URL ? fileURLToPath(sourcePath) : sourcePath;
 };
@@ -54,51 +52,27 @@ const buildInputDescriptor = (componentPropsDescriptor, providers) => {
         ],
     };
 };
-const installDomGlobals = (dom) => {
-    const { window } = dom;
-    const bindings = {
-        window,
-        document: window.document,
-        navigator: window.navigator,
-        HTMLElement: window.HTMLElement,
-        Element: window.Element,
-        Node: window.Node,
-        Text: window.Text,
-        Event: window.Event,
-        EventTarget: window.EventTarget,
-        MutationObserver: window.MutationObserver,
-        DocumentFragment: window.DocumentFragment,
-        SVGElement: window.SVGElement,
-        getComputedStyle: window.getComputedStyle.bind(window),
-        requestAnimationFrame: window.requestAnimationFrame?.bind(window) ??
-            ((callback) => setTimeout(() => callback(Date.now()), 0)),
-        cancelAnimationFrame: window.cancelAnimationFrame?.bind(window) ??
-            ((id) => clearTimeout(id)),
-    };
-    for (const [key, value] of Object.entries(bindings)) {
-        Object.defineProperty(globalThis, key, {
-            configurable: true,
-            value,
-            writable: true,
-        });
+const resolveAct = async () => {
+    const ReactModule = await import("react");
+    if ("act" in ReactModule && typeof ReactModule.act === "function") {
+        return ReactModule.act;
     }
-    Object.defineProperty(globalThis, "IS_REACT_ACT_ENVIRONMENT", {
-        configurable: true,
-        value: true,
-        writable: true,
-    });
+    const ReactTestUtils = await import("react-dom/test-utils");
+    return ReactTestUtils.act;
 };
 export const createDomRender = (options = {}) => {
-    const dom = new JSDOM(options.html ?? "<!doctype html><html><body></body></html>", {
-        url: options.url ?? "http://localhost/",
+    const dom = createIsolatedDom({
+        html: options.html,
+        url: options.url,
     });
-    installDomGlobals(dom);
     return {
         describeInput(componentPropsDescriptor) {
             return buildInputDescriptor(componentPropsDescriptor, options.providers);
         },
         async render(component, props) {
-            cleanup();
+            const ReactModule = await import("react");
+            const ReactDomClient = await import("react-dom/client");
+            const act = await resolveAct();
             const input = props;
             const componentProps = options.providers && options.providers.length > 0 && typeof input === "object" && input !== null && "props" in input
                 ? input.props
@@ -106,11 +80,11 @@ export const createDomRender = (options = {}) => {
             const providerValues = options.providers && options.providers.length > 0 && typeof input === "object" && input !== null && "providers" in input
                 ? input.providers
                 : undefined;
-            let tree = createElement(component, componentProps);
+            let tree = ReactModule.createElement(component, componentProps);
             if (options.providers && options.providers.length > 0) {
                 for (const provider of [...options.providers].reverse()) {
                     const generatedProps = providerValues?.[provider.key] ?? {};
-                    tree = createElement(provider.component, {
+                    tree = ReactModule.createElement(provider.component, {
                         ...generatedProps,
                         ...provider.fixedProps,
                         children: tree,
@@ -118,12 +92,28 @@ export const createDomRender = (options = {}) => {
                 }
             }
             if (options.wrapper) {
-                tree = createElement(options.wrapper, undefined, tree);
+                tree = ReactModule.createElement(options.wrapper, undefined, tree);
             }
-            const result = rtlRender(tree);
-            result.unmount();
-            cleanup();
+            const target = dom.window.document.createElement("div");
+            dom.window.document.body.append(target);
+            const root = ReactDomClient.createRoot(target);
+            try {
+                await act(async () => {
+                    root.render(tree);
+                });
+            }
+            finally {
+                try {
+                    await act(async () => {
+                        root.unmount();
+                    });
+                }
+                finally {
+                    target.remove();
+                }
+            }
         },
     };
 };
+export const createReactDomRender = createDomRender;
 //# sourceMappingURL=dom.js.map

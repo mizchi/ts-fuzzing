@@ -1,12 +1,20 @@
 {
-  "name": "@mizchi/props-fuzzing",
+  "name": "props-fuzzing",
   "version": "0.1.0",
-  "description": "Type-driven props fuzzing for React components",
+  "description": "Type-driven props fuzzing for React, Vue, and Svelte components",
   "type": "module",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./vue": {
+      "types": "./dist/vue.d.ts",
+      "default": "./dist/vue.js"
+    },
+    "./svelte": {
+      "types": "./dist/svelte.d.ts",
+      "default": "./dist/svelte.js"
     }
   },
   "files": [
@@ -15,11 +23,14 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "test:watch": "vitest watch",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "keywords": [
     "react",
+    "vue",
+    "svelte",
     "fuzzing",
     "property-based-testing",
     "typescript"
@@ -30,22 +41,46 @@
   },
   "peerDependencies": {
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "svelte": "^5.0.0",
+    "vue": "^3.5.0"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    },
+    "react-dom": {
+      "optional": true
+    },
+    "svelte": {
+      "optional": true
+    },
+    "vue": {
+      "optional": true
+    }
   },
   "dependencies": {
+    "@standard-schema/spec": "^1.1.0",
     "fast-check": "^4.3.0",
+    "jsdom": "^29.0.2",
     "typescript": "^5.9.3"
   },
   "devDependencies": {
-    "@testing-library/react": "^16.3.2",
+    "@sveltejs/vite-plugin-svelte": "^6.2.1",
     "@types/jsdom": "^28.0.1",
     "@types/node": "^24.9.1",
     "@types/react": "^19.2.2",
     "@types/react-dom": "^19.2.2",
-    "jsdom": "^29.0.2",
+    "@vitejs/plugin-vue": "^6.0.1",
+    "@vitest/coverage-v8": "^4.1.4",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "vitest": "^4.0.7"
+    "svelte": "^5.39.6",
+    "valibot": "^1.3.1",
+    "vite": "^7.1.12",
+    "vitest": "^4.0.7",
+    "vue": "^3.5.13",
+    "zod": "^4.3.6"
   },
   "packageManager": "pnpm@10.33.0"
 }

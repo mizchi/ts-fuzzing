@@ -3,6 +3,7 @@
     "target": "ES2024",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
+    "baseUrl": ".",
     "strict": true,
     "declaration": true,
     "declarationMap": true,
@@ -11,9 +12,21 @@
     "esModuleInterop": true,
     "jsx": "react-jsx",
     "lib": ["ES2024", "DOM"],
+    "paths": {
+      "props-fuzzing": ["./src/index.ts"],
+      "props-fuzzing/svelte": ["./src/svelte.ts"],
+      "props-fuzzing/vue": ["./src/vue.ts"]
+    },
     "types": ["node", "vitest/importMeta"],
     "rootDir": ".",
     "outDir": "./dist"
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx", "test/**/*.ts", "test/**/*.tsx"]
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "test/**/*.ts",
+    "test/**/*.tsx",
+    "examples/**/*.ts",
+    "examples/**/*.tsx"
+  ]
 }
