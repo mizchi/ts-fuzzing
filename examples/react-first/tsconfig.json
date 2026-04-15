@@ -3,9 +3,10 @@
     "target": "ES2024",
     "baseUrl": ".",
     "paths": {
-      "props-fuzzing": ["../../src/index.ts"],
-      "props-fuzzing/svelte": ["../../src/svelte.ts"],
-      "props-fuzzing/vue": ["../../src/vue.ts"]
+      "ts-fuzzing": ["../../src/index.ts"],
+      "ts-fuzzing/react": ["../../src/react.ts"],
+      "ts-fuzzing/svelte": ["../../src/svelte.ts"],
+      "ts-fuzzing/vue": ["../../src/vue.ts"]
     },
     "module": "NodeNext",
     "moduleResolution": "NodeNext",

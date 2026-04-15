@@ -1,11 +1,11 @@
 import { describe, expect, test } from "vitest";
 import {
-  createSvelteRender,
-  createVueDomRender,
   fuzzComponent,
   quickCheckComponent,
   sampleProps,
 } from "../src/index.js";
+import { createSvelteRender } from "../src/svelte.js";
+import { createVueDomRender } from "../src/vue.js";
 import SvelteBomb from "./fixtures/SvelteBomb.svelte";
 import VueBomb from "./fixtures/VueBomb.vue";
 
@@ -36,7 +36,7 @@ describe("cross-framework fuzzing", () => {
       }),
     ).rejects.toMatchObject({
       name: "ComponentFuzzError",
-      failingProps: {
+      failingValue: {
         label: expect.any(String),
       },
     });
@@ -47,14 +47,14 @@ describe("cross-framework fuzzing", () => {
       fuzzComponent({
         component: InlineVueBomb,
         sourcePath: new URL("./fixtures/VueBomb.props.ts", import.meta.url),
-        propsTypeName: "VueBombProps",
+        typeName: "VueBombProps",
         numRuns: 16,
         render: createVueDomRender(),
         seed: 7,
       }),
     ).rejects.toMatchObject({
       name: "ComponentFuzzError",
-      failingProps: {
+      failingValue: {
         label: expect.any(String),
       },
     });
@@ -112,7 +112,7 @@ describe("cross-framework fuzzing", () => {
       quickCheckComponent({
         component: SvelteBomb,
         sourcePath: new URL("./fixtures/SvelteBomb.props.ts", import.meta.url),
-        propsTypeName: "SvelteBombProps",
+        typeName: "SvelteBombProps",
         maxCases: 32,
         render: createSvelteRender(),
       }),

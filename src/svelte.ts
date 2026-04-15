@@ -1,4 +1,4 @@
-import type { ComponentRenderStrategy } from "./fuzz.js";
+import type { ComponentRenderStrategy } from "./component_fuzz.js";
 
 export type SvelteRenderOptions = {
   context?: Map<any, any> | ((props: unknown) => Map<any, any> | undefined);

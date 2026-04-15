@@ -90,6 +90,22 @@ export const arbitraryFromDescriptor = (descriptor: TypeDescriptor): Arbitrary<u
         fc.integer(),
         fc.boolean(),
       );
+    case "url": {
+      const domainArbitrary = domainStringArbitrary({ pattern: "url" });
+      return (domainArbitrary ?? fc.webUrl()).map((value) => new URL(value));
+    }
+    case "map":
+      return fc
+        .array(fc.tuple(arbitraryFromDescriptor(descriptor.key), arbitraryFromDescriptor(descriptor.value)), {
+          maxLength: 4,
+        })
+        .map((entries) => new Map(entries));
+    case "set":
+      return fc
+        .array(arbitraryFromDescriptor(descriptor.item), {
+          maxLength: 4,
+        })
+        .map((items) => new Set(items));
     case "array":
       return fc.array(arbitraryFromDescriptor(descriptor.item), {
         minLength: descriptor.constraints?.minItems,

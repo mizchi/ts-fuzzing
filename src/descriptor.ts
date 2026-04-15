@@ -48,6 +48,21 @@ export type ReactNodeDescriptor = {
   kind: "react-node";
 };
 
+export type UrlDescriptor = {
+  kind: "url";
+};
+
+export type MapDescriptor = {
+  kind: "map";
+  key: TypeDescriptor;
+  value: TypeDescriptor;
+};
+
+export type SetDescriptor = {
+  kind: "set";
+  item: TypeDescriptor;
+};
+
 export type ArrayDescriptor = {
   kind: "array";
   item: TypeDescriptor;
@@ -83,9 +98,12 @@ export type TypeDescriptor =
   | NullDescriptor
   | NumberDescriptor
   | ObjectDescriptor
+  | MapDescriptor
   | ReactNodeDescriptor
+  | SetDescriptor
   | StringDescriptor
   | TupleDescriptor
   | UndefinedDescriptor
   | UnionDescriptor
+  | UrlDescriptor
   | UnknownDescriptor;

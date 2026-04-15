@@ -7,7 +7,7 @@ import { prepareFrameworkSource } from "../src/framework_source.js";
 const tempDirs: string[] = [];
 
 const writeTempFile = (name: string, content: string) => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "props-fuzzing-framework-"));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ts-fuzzing-framework-"));
   tempDirs.push(dir);
   const filePath = path.join(dir, name);
   fs.writeFileSync(filePath, content);
@@ -38,7 +38,7 @@ describe("framework source preparation", () => {
 <div>{label}:{count}</div>`,
     );
     const exported = prepareFrameworkSource(exportedPath);
-    expect(exported?.propsTypeName).toBe("__PropsFuzzingExtracted");
+    expect(exported?.typeName).toBe("__TsFuzzingExtracted");
     expect(exported?.virtualSourceText).toContain("declare function $props<T>(): T;");
     expect(exported?.virtualSourceText).toContain("label?: typeof label;");
     expect(exported?.virtualSourceText).toContain("count: typeof count;");
@@ -51,7 +51,7 @@ describe("framework source preparation", () => {
 </script>`,
     );
     const runes = prepareFrameworkSource(runesPath);
-    expect(runes?.virtualSourceText).toContain("export type __PropsFuzzingExtracted = { title: string; count?: number }");
+    expect(runes?.virtualSourceText).toContain("export type __TsFuzzingExtracted = { title: string; count?: number }");
 
     const genericRunesPath = writeTempFile(
       "RunesGeneric.svelte",
@@ -60,7 +60,7 @@ describe("framework source preparation", () => {
 </script>`,
     );
     const genericRunes = prepareFrameworkSource(genericRunesPath);
-    expect(genericRunes?.virtualSourceText).toContain("export type __PropsFuzzingExtracted = { label: string; count?: number }");
+    expect(genericRunes?.virtualSourceText).toContain("export type __TsFuzzingExtracted = { label: string; count?: number }");
   });
 
   test("returns undefined for svelte files without instance props", () => {
@@ -80,7 +80,7 @@ defineProps<Props>()
 </script>`,
     );
     const typed = prepareFrameworkSource(typedPath);
-    expect(typed?.virtualSourceText).toContain("export type __PropsFuzzingExtracted = Props;");
+    expect(typed?.virtualSourceText).toContain("export type __TsFuzzingExtracted = Props;");
     expect(typed?.virtualSourceText).toContain("declare function defineProps<T>(): T;");
 
     const typedWithDefaultsPath = writeTempFile(
@@ -91,7 +91,7 @@ const props = withDefaults(defineProps<Props>(), { count: 1 })
 </script>`,
     );
     const typedWithDefaults = prepareFrameworkSource(typedWithDefaultsPath);
-    expect(typedWithDefaults?.virtualSourceText).toContain("export type __PropsFuzzingExtracted = Props;");
+    expect(typedWithDefaults?.virtualSourceText).toContain("export type __TsFuzzingExtracted = Props;");
 
     const runtimePath = writeTempFile(
       "Runtime.vue",
@@ -104,7 +104,7 @@ withDefaults(defineProps({
     );
     const runtime = prepareFrameworkSource(runtimePath);
     expect(runtime?.virtualSourceText).toContain("ExtractPublicPropTypes");
-    expect(runtime?.virtualSourceText).toContain("const __propsFuzzingOptions = ({");
+    expect(runtime?.virtualSourceText).toContain("const __tsFuzzingOptions = ({");
 
     const classicPath = writeTempFile(
       "Classic.vue",
@@ -118,7 +118,7 @@ export default defineComponent({
 </script>`,
     );
     const classic = prepareFrameworkSource(classicPath);
-    expect(classic?.virtualSourceText).toContain("export type __PropsFuzzingExtracted = ExtractPublicPropTypes<typeof __propsFuzzingOptions>;");
+    expect(classic?.virtualSourceText).toContain("export type __TsFuzzingExtracted = ExtractPublicPropTypes<typeof __tsFuzzingOptions>;");
 
     const objectLiteralPath = writeTempFile(
       "ObjectLiteral.vue",
@@ -131,7 +131,7 @@ export default {
 </script>`,
     );
     const objectLiteral = prepareFrameworkSource(objectLiteralPath);
-    expect(objectLiteral?.virtualSourceText).toContain("const __propsFuzzingOptions = ({");
+    expect(objectLiteral?.virtualSourceText).toContain("const __tsFuzzingOptions = ({");
   });
 
   test("returns undefined for vue files without props", () => {

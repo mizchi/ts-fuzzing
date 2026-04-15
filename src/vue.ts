@@ -1,4 +1,4 @@
-import type { ComponentRenderStrategy } from "./fuzz.js";
+import type { ComponentRenderStrategy } from "./component_fuzz.js";
 import { createIsolatedDom } from "./happy_dom.js";
 
 export type VueAppLike = {

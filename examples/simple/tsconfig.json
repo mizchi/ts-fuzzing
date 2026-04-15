@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "target": "ES2024",
+    "baseUrl": ".",
+    "paths": {
+      "ts-fuzzing": ["../../src/index.ts"]
+    },
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "lib": ["ES2024"],
+    "types": ["node", "vitest/importMeta"],
+    "skipLibCheck": true
+  },
+  "include": ["src/**/*.ts"]
+}

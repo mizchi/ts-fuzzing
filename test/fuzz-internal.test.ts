@@ -26,7 +26,7 @@ const tempDirs: string[] = [];
 type FakeRng = Pick<DeterministicRng, "bool" | "float" | "int" | "pick">;
 
 const makeTempDir = () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "props-fuzzing-"));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ts-fuzzing-"));
   tempDirs.push(dir);
   return dir;
 };
@@ -51,21 +51,30 @@ describe("fuzz internal helpers", () => {
     const serialized = serializeValue({
       array: [1, undefined, () => "x"],
       bool: true,
+      endpoint: new URL("https://example.com/"),
+      lookup: new Map([["x", 1]]),
       nested: { value: null },
+      tags: new Set(["a"]),
       text: "ok",
     });
 
     expect(serialized).toEqual({
-      array: [1, { __propsFuzzingType: "undefined" }, { __propsFuzzingType: "function" }],
+      array: [1, { __tsFuzzingType: "undefined" }, { __tsFuzzingType: "function" }],
       bool: true,
+      endpoint: { __tsFuzzingType: "url", value: "https://example.com/" },
+      lookup: { __tsFuzzingType: "map", entries: [["x", 1]] },
       nested: { value: null },
+      tags: { __tsFuzzingType: "set", values: ["a"] },
       text: "ok",
     });
 
     const restored = deserializeValue(serialized) as Record<string, unknown>;
     expect(restored.bool).toBe(true);
+    expect(restored.endpoint).toBeInstanceOf(URL);
+    expect(restored.lookup).toBeInstanceOf(Map);
     expect(restored.text).toBe("ok");
     expect(restored.nested).toEqual({ value: null });
+    expect(restored.tags).toBeInstanceOf(Set);
     expect(Array.isArray(restored.array)).toBe(true);
     expect((restored.array as unknown[])[1]).toBeUndefined();
     expect(typeof (restored.array as unknown[])[2]).toBe("function");
@@ -148,6 +157,9 @@ describe("fuzz internal helpers", () => {
       { kind: "undefined" },
       { kind: "function" },
       { kind: "react-node" },
+      { kind: "url" },
+      { kind: "map", key: { kind: "literal", value: "x" }, value: { kind: "literal", value: 1 } },
+      { kind: "set", item: { kind: "literal", value: "x" } },
       { kind: "array", item: { kind: "literal", value: 1 }, constraints: { minItems: 1, maxItems: 1 } },
       { kind: "tuple", items: [{ kind: "literal", value: "a" }, { kind: "literal", value: 1 }] },
       { kind: "object", properties: [{ key: "name", optional: false, value: { kind: "literal", value: "ok" } }] },
@@ -162,10 +174,13 @@ describe("fuzz internal helpers", () => {
     expect(values[5]).toBeNull();
     expect(values[6]).toBeUndefined();
     expect(typeof values[7]).toBe("function");
-    expect(Array.isArray(values[9])).toBe(true);
-    expect(values[10]).toEqual(["a", 1]);
-    expect(values[11]).toEqual({ name: "ok" });
-    expect(["left", "right"]).toContain(values[12]);
+    expect(values[9]).toBeInstanceOf(URL);
+    expect(values[10]).toBeInstanceOf(Map);
+    expect(values[11]).toBeInstanceOf(Set);
+    expect(Array.isArray(values[12])).toBe(true);
+    expect(values[13]).toEqual(["a", 1]);
+    expect(values[14]).toEqual({ name: "ok" });
+    expect(["left", "right"]).toContain(values[15]);
 
     const floatValue = generateValue(
       { kind: "number", integer: false, constraints: { min: 1, max: 1 } },
@@ -193,6 +208,9 @@ describe("fuzz internal helpers", () => {
     expect(matchesDescriptor(undefined, { kind: "undefined" })).toBe(true);
     expect(matchesDescriptor(() => undefined, { kind: "function" })).toBe(true);
     expect(matchesDescriptor(1, { kind: "react-node" })).toBe(true);
+    expect(matchesDescriptor(new URL("https://example.com/"), { kind: "url" })).toBe(true);
+    expect(matchesDescriptor(new Map([["x", 1]]), { kind: "map", key: { kind: "string" }, value: { kind: "number", integer: true } })).toBe(true);
+    expect(matchesDescriptor(new Set(["x"]), { kind: "set", item: { kind: "string" } })).toBe(true);
     expect(matchesDescriptor([], { kind: "array", item: { kind: "unknown" } })).toBe(true);
     expect(matchesDescriptor([1], { kind: "tuple", items: [{ kind: "number", integer: true }] })).toBe(true);
     expect(matchesDescriptor({ ok: true }, { kind: "object", properties: [] })).toBe(true);
@@ -243,6 +261,9 @@ describe("fuzz internal helpers", () => {
     const fn = () => undefined;
     expect(mutateValue(fn, { kind: "function" }, fakeRng())).toBe(fn);
     expect(mutateValue("x", { kind: "react-node" }, fakeRng())).not.toBeUndefined();
+    expect(mutateValue(new URL("https://example.com/"), { kind: "url" }, fakeRng())).toBeInstanceOf(URL);
+    expect(mutateValue(new Map([["x", 1]]), { kind: "map", key: { kind: "string" }, value: { kind: "number", integer: true } }, fakeRng())).toBeInstanceOf(Map);
+    expect(mutateValue(new Set(["x"]), { kind: "set", item: { kind: "string" } }, fakeRng())).toBeInstanceOf(Set);
     expect(mutateValue([], { kind: "array", item: { kind: "literal", value: 1 } }, fakeRng())).toEqual([1]);
     expect(
       mutateValue([1], { kind: "array", item: { kind: "literal", value: 1 }, constraints: { maxItems: 2 } }, fakeRng({ pick: (values) => values[1]! })),

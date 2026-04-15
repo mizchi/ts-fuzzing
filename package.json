@@ -1,12 +1,16 @@
 {
-  "name": "props-fuzzing",
+  "name": "ts-fuzzing",
   "version": "0.1.0",
-  "description": "Type-driven props fuzzing for React, Vue, and Svelte components",
+  "description": "TypeScript-driven value fuzzing and quick-checking with optional UI adapters",
   "type": "module",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./react": {
+      "types": "./dist/react.d.ts",
+      "default": "./dist/react.js"
     },
     "./vue": {
       "types": "./dist/vue.d.ts",
@@ -28,12 +32,11 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "keywords": [
-    "react",
-    "vue",
-    "svelte",
+    "typescript",
     "fuzzing",
+    "quickcheck",
     "property-based-testing",
-    "typescript"
+    "schema"
   ],
   "license": "MIT",
   "engines": {

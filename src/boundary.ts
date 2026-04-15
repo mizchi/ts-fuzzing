@@ -9,11 +9,20 @@ const OMIT = Symbol("omit");
 
 const stableSerialize = (value: unknown): string => {
   return JSON.stringify(value, (_key, entry) => {
+    if (entry instanceof URL) {
+      return { __tsFuzzingType: "url", value: entry.href };
+    }
+    if (entry instanceof Map) {
+      return { __tsFuzzingType: "map", entries: [...entry.entries()] };
+    }
+    if (entry instanceof Set) {
+      return { __tsFuzzingType: "set", values: [...entry.values()] };
+    }
     if (typeof entry === "function") {
-      return { __propsFuzzingType: "function" };
+      return { __tsFuzzingType: "function" };
     }
     if (entry === undefined) {
-      return { __propsFuzzingType: "undefined" };
+      return { __tsFuzzingType: "undefined" };
     }
     return entry;
   });
@@ -92,7 +101,13 @@ export const boundaryValuesFromDescriptor = (
     case "number": {
       const min = descriptor.constraints?.min ?? -1;
       const max = descriptor.constraints?.max ?? 1;
-      const values = [min, Math.min(max, min + 1), Math.max(min, max - 1), max];
+      const values = descriptor.integer
+        ? [min, Math.min(max, min + 1), Math.max(min, max - 1), max]
+        : [
+            min,
+            min === max ? min : (min + max) / 2,
+            max,
+          ];
       return dedupe(values).slice(0, maxCases);
     }
     case "boolean":
@@ -107,6 +122,28 @@ export const boundaryValuesFromDescriptor = (
       return [() => undefined];
     case "react-node":
       return [null, "", "x", 0, 1, false, true].slice(0, maxCases);
+    case "url":
+      return [
+        new URL("https://example.com/"),
+        new URL("http://localhost/"),
+      ].slice(0, maxCases);
+    case "map": {
+      const keys = boundaryValuesFromDescriptor(descriptor.key, 2);
+      const values = boundaryValuesFromDescriptor(descriptor.value, 2);
+      return [
+        new Map(),
+        new Map(keys.slice(0, 1).map((key, index) => [key, values[index % Math.max(1, values.length)]])),
+        new Map(keys.slice(0, 2).map((key, index) => [key, values[index % Math.max(1, values.length)]])),
+      ].slice(0, maxCases);
+    }
+    case "set": {
+      const items = boundaryValuesFromDescriptor(descriptor.item, 2);
+      return [
+        new Set(),
+        new Set(items.slice(0, 1)),
+        new Set(items.slice(0, 2)),
+      ].slice(0, maxCases);
+    }
     case "array": {
       const minLength = descriptor.constraints?.minItems ?? 0;
       const maxLength = Math.max(minLength, descriptor.constraints?.maxItems ?? Math.max(minLength, 2));

@@ -3,10 +3,12 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, test } from "vitest";
 import {
-  createDomRender,
+  createReactDomRender,
   fuzzReactComponent,
   fuzzReactComponentGuided,
   quickCheckReactComponent,
+} from "../src/react.js";
+import {
   sampleBoundaryProps,
   sampleProps,
 } from "../src/index.js";
@@ -17,7 +19,7 @@ import { EffectBomb } from "./fixtures/EffectBomb.js";
 import { ThemeBomb, ThemeLabel, ThemeProvider } from "./fixtures/ThemeLabel.js";
 import { SafeButton } from "./fixtures/SafeButton.js";
 
-describe("props-fuzzing", () => {
+describe("ts-fuzzing", () => {
   test("samples props from a component props type", async () => {
     const values = await sampleProps({
       sourcePath: new URL("./fixtures/SafeButton.tsx", import.meta.url),
@@ -97,7 +99,7 @@ describe("props-fuzzing", () => {
       }),
     ).rejects.toMatchObject({
       name: "ReactComponentFuzzError",
-      failingProps: {
+      failingValue: {
         variant: "danger",
       },
     });
@@ -115,7 +117,7 @@ describe("props-fuzzing", () => {
       }),
     ).rejects.toMatchObject({
       name: "ReactComponentFuzzError",
-      failingProps: {
+      failingValue: {
         variant: "danger",
       },
       report: {
@@ -125,7 +127,7 @@ describe("props-fuzzing", () => {
   });
 
   test("guided mode persists discovered corpus", async () => {
-    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "props-fuzzing-"));
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "ts-fuzzing-"));
     const corpusPath = path.join(tempDir, "corpus.json");
 
     await expect(
@@ -159,7 +161,7 @@ describe("props-fuzzing", () => {
         initialCorpusSize: 4,
         maxIterations: 20,
         seed: 8,
-        render: createDomRender({
+        render: createReactDomRender({
           providers: [
             {
               key: "themeProvider",
@@ -172,7 +174,7 @@ describe("props-fuzzing", () => {
       }),
     ).rejects.toMatchObject({
       name: "ReactComponentFuzzError",
-      failingProps: {
+      failingValue: {
         providers: {
           themeProvider: {
             theme: "dark",
@@ -203,11 +205,11 @@ describe("props-fuzzing", () => {
         exportName: "EffectBomb",
         numRuns: 30,
         seed: 9,
-        render: createDomRender(),
+        render: createReactDomRender(),
       }),
     ).rejects.toMatchObject({
       name: "ReactComponentFuzzError",
-      failingProps: {
+      failingValue: {
         mode: "explode",
       },
     });
@@ -221,7 +223,7 @@ describe("props-fuzzing", () => {
         exportName: "ThemeLabel",
         numRuns: 20,
         seed: 5,
-        render: createDomRender({
+        render: createReactDomRender({
           wrapper: ({ children }) => <ThemeProvider theme="dark">{children}</ThemeProvider>,
         }),
       }),
@@ -236,7 +238,7 @@ describe("props-fuzzing", () => {
         exportName: "ThemeBomb",
         numRuns: 30,
         seed: 8,
-        render: createDomRender({
+        render: createReactDomRender({
           providers: [
             {
               key: "themeProvider",
@@ -249,7 +251,7 @@ describe("props-fuzzing", () => {
       }),
     ).rejects.toMatchObject({
       name: "ReactComponentFuzzError",
-      failingProps: {
+      failingValue: {
         providers: {
           themeProvider: {
             theme: "dark",
@@ -269,7 +271,7 @@ describe("props-fuzzing", () => {
       }),
     ).rejects.toMatchObject({
       name: "ReactComponentFuzzError",
-      failingProps: {
+      failingValue: {
         count: 2,
         variant: "danger",
       },
@@ -287,7 +289,7 @@ describe("props-fuzzing", () => {
         sourcePath: new URL("./fixtures/ThemeLabel.tsx", import.meta.url),
         exportName: "ThemeBomb",
         maxCases: 32,
-        render: createDomRender({
+        render: createReactDomRender({
           providers: [
             {
               key: "themeProvider",
@@ -300,7 +302,7 @@ describe("props-fuzzing", () => {
       }),
     ).rejects.toMatchObject({
       name: "ReactComponentFuzzError",
-      failingProps: {
+      failingValue: {
         providers: {
           themeProvider: {
             theme: "dark",

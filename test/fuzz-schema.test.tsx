@@ -5,6 +5,8 @@ import { describe, expect, test } from "vitest";
 import {
   fuzzReactComponent,
   quickCheckReactComponent,
+} from "../src/react.js";
+import {
   sampleBoundaryProps,
   sampleProps,
 } from "../src/index.js";
@@ -162,7 +164,7 @@ describe("schema support", () => {
       }),
     ).rejects.toMatchObject({
       name: "ReactComponentFuzzError",
-      failingProps: {
+      failingValue: {
         variant: "danger",
       },
     });

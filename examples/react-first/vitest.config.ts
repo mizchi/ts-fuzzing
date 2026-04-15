@@ -8,15 +8,19 @@ export default defineConfig({
   resolve: {
     alias: [
       {
-        find: /^props-fuzzing$/,
+        find: /^ts-fuzzing$/,
         replacement: fileURLToPath(new URL("../../src/index.ts", import.meta.url)),
       },
       {
-        find: /^props-fuzzing\/svelte$/,
+        find: /^ts-fuzzing\/react$/,
+        replacement: fileURLToPath(new URL("../../src/react.ts", import.meta.url)),
+      },
+      {
+        find: /^ts-fuzzing\/svelte$/,
         replacement: fileURLToPath(new URL("../../src/svelte.ts", import.meta.url)),
       },
       {
-        find: /^props-fuzzing\/vue$/,
+        find: /^ts-fuzzing\/vue$/,
         replacement: fileURLToPath(new URL("../../src/vue.ts", import.meta.url)),
       },
       { find: /^react\/jsx-dev-runtime$/, replacement: require.resolve("react/jsx-dev-runtime") },

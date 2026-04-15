@@ -5,10 +5,10 @@ import ts from "typescript";
 
 const require = createRequire(import.meta.url);
 
-const EXTRACTED_PROPS_TYPE_NAME = "__PropsFuzzingExtracted";
+const EXTRACTED_PROPS_TYPE_NAME = "__TsFuzzingExtracted";
 
 type PreparedSource = {
-  propsTypeName?: string;
+  typeName?: string;
   sourcePath: string;
   virtualPath?: string;
   virtualSourceText?: string;
@@ -44,12 +44,12 @@ const toVirtualPath = (sourcePath: string, suffix: string) => {
 const createVirtualSource = (
   sourcePath: string,
   sourceText: string,
-  propsTypeName = EXTRACTED_PROPS_TYPE_NAME,
+  typeName = EXTRACTED_PROPS_TYPE_NAME,
 ): PreparedSource => {
   return {
-    propsTypeName,
+    typeName,
     sourcePath,
-    virtualPath: toVirtualPath(sourcePath, ".props-fuzzing.ts"),
+    virtualPath: toVirtualPath(sourcePath, ".ts-fuzzing.ts"),
     virtualSourceText: sourceText,
   };
 };
@@ -299,7 +299,7 @@ const createVueVirtualSource = (sourcePath: string) => {
     if (setupProps?.kind === "runtime") {
       return createVirtualSource(
         sourcePath,
-        `${combinedSource}\n\nimport type { ExtractPublicPropTypes } from "vue";\ndeclare function defineProps<T>(): T;\ndeclare function defineProps<T extends object>(props: T): ExtractPublicPropTypes<T>;\ndeclare function withDefaults<T, D>(props: T, defaults: D): T;\nconst __propsFuzzingOptions = (${setupProps.expressionText}) as const;\nexport type ${EXTRACTED_PROPS_TYPE_NAME} = ExtractPublicPropTypes<typeof __propsFuzzingOptions>;\n`,
+        `${combinedSource}\n\nimport type { ExtractPublicPropTypes } from "vue";\ndeclare function defineProps<T>(): T;\ndeclare function defineProps<T extends object>(props: T): ExtractPublicPropTypes<T>;\ndeclare function withDefaults<T, D>(props: T, defaults: D): T;\nconst __tsFuzzingOptions = (${setupProps.expressionText}) as const;\nexport type ${EXTRACTED_PROPS_TYPE_NAME} = ExtractPublicPropTypes<typeof __tsFuzzingOptions>;\n`,
       );
     }
   }
@@ -316,7 +316,7 @@ const createVueVirtualSource = (sourcePath: string) => {
     if (runtimeProps) {
       return createVirtualSource(
         sourcePath,
-        `${scriptContent}\n\nimport type { ExtractPublicPropTypes } from "vue";\nconst __propsFuzzingOptions = (${runtimeProps}) as const;\nexport type ${EXTRACTED_PROPS_TYPE_NAME} = ExtractPublicPropTypes<typeof __propsFuzzingOptions>;\n`,
+        `${scriptContent}\n\nimport type { ExtractPublicPropTypes } from "vue";\nconst __tsFuzzingOptions = (${runtimeProps}) as const;\nexport type ${EXTRACTED_PROPS_TYPE_NAME} = ExtractPublicPropTypes<typeof __tsFuzzingOptions>;\n`,
       );
     }
   }

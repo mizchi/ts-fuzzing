@@ -31,6 +31,10 @@ jobs:
         run: pnpm install --frozen-lockfile
         working-directory: examples/react-first
 
+      - name: Install simple example dependencies
+        run: pnpm install --frozen-lockfile
+        working-directory: examples/simple
+
       - name: Typecheck
         run: pnpm typecheck
 
@@ -47,3 +51,11 @@ jobs:
       - name: Example standalone typecheck
         run: pnpm typecheck
         working-directory: examples/react-first
+
+      - name: Simple example standalone test
+        run: pnpm test
+        working-directory: examples/simple
+
+      - name: Simple example standalone typecheck
+        run: pnpm typecheck
+        working-directory: examples/simple

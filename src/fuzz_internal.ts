@@ -10,20 +10,38 @@ export type SerializedValue =
   | boolean
   | number
   | string
-  | { __propsFuzzingType: "function" }
-  | { __propsFuzzingType: "undefined" }
+  | { __tsFuzzingType: "function" }
+  | { __tsFuzzingType: "map"; entries: [SerializedValue, SerializedValue][] }
+  | { __tsFuzzingType: "set"; values: SerializedValue[] }
+  | { __tsFuzzingType: "undefined" }
+  | { __tsFuzzingType: "url"; value: string }
   | SerializedValue[]
   | { [key: string]: SerializedValue };
 
 export const serializeValue = (value: unknown): SerializedValue => {
   if (value === undefined) {
-    return { __propsFuzzingType: "undefined" };
+    return { __tsFuzzingType: "undefined" };
   }
   if (value === null || typeof value === "boolean" || typeof value === "number" || typeof value === "string") {
     return value;
   }
   if (typeof value === "function") {
-    return { __propsFuzzingType: "function" };
+    return { __tsFuzzingType: "function" };
+  }
+  if (value instanceof URL) {
+    return { __tsFuzzingType: "url", value: value.href };
+  }
+  if (value instanceof Map) {
+    return {
+      __tsFuzzingType: "map",
+      entries: [...value.entries()].map(([key, entry]) => [serializeValue(key), serializeValue(entry)]),
+    };
+  }
+  if (value instanceof Set) {
+    return {
+      __tsFuzzingType: "set",
+      values: [...value.values()].map((entry) => serializeValue(entry)),
+    };
   }
   if (Array.isArray(value)) {
     return value.map((item) => serializeValue(item));
@@ -35,7 +53,7 @@ export const serializeValue = (value: unknown): SerializedValue => {
     }
     return output;
   }
-  return { __propsFuzzingType: "undefined" };
+  return { __tsFuzzingType: "undefined" };
 };
 
 export const deserializeValue = (value: SerializedValue): unknown => {
@@ -50,18 +68,28 @@ export const deserializeValue = (value: SerializedValue): unknown => {
   if (Array.isArray(value)) {
     return value.map((item) => deserializeValue(item));
   }
-  if (!("__propsFuzzingType" in value)) {
+  if (!("__tsFuzzingType" in value)) {
     const output: Record<string, unknown> = {};
     for (const [key, entry] of Object.entries(value)) {
       output[key] = deserializeValue(entry);
     }
     return output;
   }
-  switch (value.__propsFuzzingType) {
+  switch (value.__tsFuzzingType) {
     case "undefined":
       return undefined;
     case "function":
       return () => undefined;
+    case "url":
+      return new URL((value as Extract<SerializedValue, { __tsFuzzingType: "url" }>).value);
+    case "map": {
+      const entries = (value as Extract<SerializedValue, { __tsFuzzingType: "map" }>).entries;
+      return new Map(entries.map(([key, entry]) => [deserializeValue(key), deserializeValue(entry)]));
+    }
+    case "set": {
+      const entries = (value as Extract<SerializedValue, { __tsFuzzingType: "set" }>).values;
+      return new Set(entries.map((entry) => deserializeValue(entry)));
+    }
   }
 };
 
@@ -235,6 +263,23 @@ export const generateValue = (descriptor: TypeDescriptor, rng: DeterministicRng)
       return () => undefined;
     case "react-node":
       return rng.pick([null, rng.bool(), rng.int(-10, 10), generateString({ maxLength: 16 }, rng)]);
+    case "url":
+      return new URL(generateString({ pattern: "url", minLength: 1 }, rng));
+    case "map": {
+      const length = rng.int(0, 4);
+      return new Map(
+        Array.from({ length }, () => [
+          generateValue(descriptor.key, rng),
+          generateValue(descriptor.value, rng),
+        ]),
+      );
+    }
+    case "set": {
+      const length = rng.int(0, 4);
+      return new Set(
+        Array.from({ length }, () => generateValue(descriptor.item, rng)),
+      );
+    }
     case "array": {
       const [minLength, maxLength] = clampLengths(
         descriptor.constraints,
@@ -285,6 +330,12 @@ export const matchesDescriptor = (value: unknown, descriptor: TypeDescriptor): b
       return typeof value === "function";
     case "react-node":
       return value === null || ["string", "number", "boolean"].includes(typeof value);
+    case "url":
+      return value instanceof URL;
+    case "map":
+      return value instanceof Map;
+    case "set":
+      return value instanceof Set;
     case "array":
       return Array.isArray(value);
     case "tuple":
@@ -389,6 +440,37 @@ export const mutateValue = (
       return current;
     case "react-node":
       return generateValue(descriptor, rng);
+    case "url":
+      return generateValue(descriptor, rng);
+    case "map": {
+      const currentMap = current instanceof Map ? new Map(current) : new Map();
+      if (currentMap.size === 0 || rng.bool(0.4)) {
+        currentMap.set(generateValue(descriptor.key, rng), generateValue(descriptor.value, rng));
+        return currentMap;
+      }
+      const entries = [...currentMap.entries()];
+      const [key] = entries[rng.int(0, entries.length - 1)]!;
+      if (rng.bool(0.25)) {
+        currentMap.delete(key);
+        return currentMap;
+      }
+      currentMap.set(key, mutateValue(currentMap.get(key), descriptor.value, rng));
+      return currentMap;
+    }
+    case "set": {
+      const currentSet = current instanceof Set ? new Set(current) : new Set();
+      if (currentSet.size === 0 || rng.bool(0.4)) {
+        currentSet.add(generateValue(descriptor.item, rng));
+        return currentSet;
+      }
+      const values = [...currentSet.values()];
+      const entry = values[rng.int(0, values.length - 1)]!;
+      currentSet.delete(entry);
+      if (!rng.bool(0.25)) {
+        currentSet.add(mutateValue(entry, descriptor.item, rng));
+      }
+      return currentSet;
+    }
     case "array": {
       const array = Array.isArray(current) ? [...current] : [];
       const [minLength, maxLength] = clampLengths(

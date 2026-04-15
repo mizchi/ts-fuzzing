@@ -13,6 +13,9 @@ describe("generator helpers", () => {
   test("builds domain-aware boundary strings", () => {
     expect(domainBoundaryStrings({ pattern: "email" })?.every((value) => value.includes("@"))).toBe(true);
     expect(domainBoundaryStrings({ pattern: "url" })?.every((value) => value.includes("://"))).toBe(true);
+    expect(domainBoundaryStrings({ pattern: "uuid" })?.every((value) => /^[0-9a-f-]{36}$/i.test(value))).toBe(true);
+    expect(domainBoundaryStrings({ pattern: "ulid" })?.every((value) => /^[0-9A-HJKMNP-TV-Z]{26}$/.test(value))).toBe(true);
+    expect(domainBoundaryStrings({ pattern: "iso-date" })?.every((value) => new Date(value).toISOString() === value)).toBe(true);
     expect(domainBoundaryStrings({ pattern: "email", minLength: 100 })).toEqual([]);
     expect(domainBoundaryStrings({ pattern: "regex" })).toBeUndefined();
   });
@@ -20,11 +23,20 @@ describe("generator helpers", () => {
   test("builds domain-aware arbitraries", () => {
     const emailArbitrary = domainStringArbitrary({ pattern: "email", minLength: 1 });
     const urlArbitrary = domainStringArbitrary({ pattern: "url", minLength: 1 });
+    const uuidArbitrary = domainStringArbitrary({ pattern: "uuid", minLength: 1 });
+    const ulidArbitrary = domainStringArbitrary({ pattern: "ulid", minLength: 1 });
+    const isoDateArbitrary = domainStringArbitrary({ pattern: "iso-date", minLength: 1 });
 
     expect(emailArbitrary).toBeDefined();
     expect(urlArbitrary).toBeDefined();
+    expect(uuidArbitrary).toBeDefined();
+    expect(ulidArbitrary).toBeDefined();
+    expect(isoDateArbitrary).toBeDefined();
     expect(fc.sample(emailArbitrary!, { numRuns: 3 }).every((value) => value.includes("@"))).toBe(true);
     expect(fc.sample(urlArbitrary!, { numRuns: 3 }).every((value) => value.includes("://"))).toBe(true);
+    expect(fc.sample(uuidArbitrary!, { numRuns: 3 }).every((value) => /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value))).toBe(true);
+    expect(fc.sample(ulidArbitrary!, { numRuns: 3 }).every((value) => /^[0-9A-HJKMNP-TV-Z]{26}$/.test(value))).toBe(true);
+    expect(fc.sample(isoDateArbitrary!, { numRuns: 3 }).every((value) => new Date(value).toISOString() === value)).toBe(true);
     expect(domainStringArbitrary({ pattern: "other" })).toBeUndefined();
   });
 
@@ -48,6 +60,9 @@ describe("generator helpers", () => {
       fc.sample(arbitraryFromDescriptor({ kind: "undefined" }), { numRuns: 1 }),
       fc.sample(arbitraryFromDescriptor({ kind: "function" }), { numRuns: 1 }),
       fc.sample(arbitraryFromDescriptor({ kind: "react-node" }), { numRuns: 4 }),
+      fc.sample(arbitraryFromDescriptor({ kind: "url" }), { numRuns: 2 }),
+      fc.sample(arbitraryFromDescriptor({ kind: "map", key: { kind: "string" }, value: { kind: "number", integer: true } }), { numRuns: 2 }),
+      fc.sample(arbitraryFromDescriptor({ kind: "set", item: { kind: "string" } }), { numRuns: 2 }),
       fc.sample(arbitraryFromDescriptor({ kind: "array", item: { kind: "literal", value: 1 }, constraints: { minItems: 1, maxItems: 2 } }), { numRuns: 4 }),
       fc.sample(arbitraryFromDescriptor({ kind: "tuple", items: [{ kind: "literal", value: "a" }, { kind: "literal", value: 1 }] }), { numRuns: 1 }),
       fc.sample(arbitraryFromDescriptor({ kind: "object", properties: [{ key: "name", optional: false, value: { kind: "literal", value: "ok" } }, { key: "count", optional: true, value: { kind: "number", integer: true } }] }), { numRuns: 4 }),
@@ -63,10 +78,13 @@ describe("generator helpers", () => {
     expect(values[8]).toEqual([null]);
     expect(values[9]).toEqual([undefined]);
     expect(typeof values[10][0]).toBe("function");
-    expect(values[12].every((value) => Array.isArray(value) && value.length >= 1 && value.length <= 2)).toBe(true);
-    expect(values[13]).toEqual([["a", 1]]);
-    expect(values[14].every((value) => value && (value as Record<string, unknown>).name === "ok")).toBe(true);
-    expect(values[15].every((value) => value === "left" || value === "right")).toBe(true);
+    expect(values[12].every((value) => value instanceof URL)).toBe(true);
+    expect(values[13].every((value) => value instanceof Map)).toBe(true);
+    expect(values[14].every((value) => value instanceof Set)).toBe(true);
+    expect(values[15].every((value) => Array.isArray(value) && value.length >= 1 && value.length <= 2)).toBe(true);
+    expect(values[16]).toEqual([["a", 1]]);
+    expect(values[17].every((value) => value && (value as Record<string, unknown>).name === "ok")).toBe(true);
+    expect(values[18].every((value) => value === "left" || value === "right")).toBe(true);
   });
 
   test("produces boundary values from every descriptor kind", () => {
@@ -75,12 +93,16 @@ describe("generator helpers", () => {
     expect(boundaryValuesFromDescriptor({ kind: "string", constraints: { pattern: "a+" } }).every((value) => /a+/.test(String(value)))).toBe(true);
     expect(boundaryValuesFromDescriptor({ kind: "string", constraints: { minLength: 1, maxLength: 2 } })).toEqual(["a", "aa"]);
     expect(boundaryValuesFromDescriptor({ kind: "number", integer: true, constraints: { min: 1, max: 3 } })).toEqual([1, 2, 3]);
+    expect(boundaryValuesFromDescriptor({ kind: "number", integer: false, constraints: { min: 0, max: 1 } })).toEqual([0, 0.5, 1]);
     expect(boundaryValuesFromDescriptor({ kind: "boolean" })).toEqual([false, true]);
     expect(boundaryValuesFromDescriptor({ kind: "literal", value: "x" })).toEqual(["x"]);
     expect(boundaryValuesFromDescriptor({ kind: "null" })).toEqual([null]);
     expect(boundaryValuesFromDescriptor({ kind: "undefined" })).toEqual([undefined]);
     expect(typeof boundaryValuesFromDescriptor({ kind: "function" })[0]).toBe("function");
     expect(boundaryValuesFromDescriptor({ kind: "react-node" })).toEqual([null, "", "x", 0, 1, false, true]);
+    expect(boundaryValuesFromDescriptor({ kind: "url" }).every((value) => value instanceof URL)).toBe(true);
+    expect(boundaryValuesFromDescriptor({ kind: "map", key: { kind: "literal", value: "x" }, value: { kind: "literal", value: 1 } }).every((value) => value instanceof Map)).toBe(true);
+    expect(boundaryValuesFromDescriptor({ kind: "set", item: { kind: "literal", value: "x" } }).every((value) => value instanceof Set)).toBe(true);
     expect(boundaryValuesFromDescriptor({ kind: "array", item: { kind: "literal", value: "x" }, constraints: { minItems: 1, maxItems: 2 } })).toEqual([["x"], ["x", "x"]]);
     expect(boundaryValuesFromDescriptor({ kind: "tuple", items: [{ kind: "literal", value: "a" }, { kind: "literal", value: 1 }] })).toEqual([["a", 1]]);
     expect(boundaryValuesFromDescriptor({ kind: "object", properties: [{ key: "name", optional: false, value: { kind: "literal", value: "ok" } }, { key: "count", optional: true, value: { kind: "literal", value: 1 } }] }).some((value) => !("count" in (value as Record<string, unknown>)))).toBe(true);

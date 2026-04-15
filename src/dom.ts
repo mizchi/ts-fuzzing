@@ -1,14 +1,14 @@
 import { fileURLToPath } from "node:url";
 import type * as React from "react";
 import { analyzePropsDescriptor } from "./analyzer.js";
+import type { ComponentRenderStrategy } from "./component_fuzz.js";
 import type { ObjectDescriptor, PropertyDescriptor, TypeDescriptor } from "./descriptor.js";
-import type { ComponentRenderStrategy } from "./fuzz.js";
 import { createIsolatedDom } from "./happy_dom.js";
 
 type SourceOptions = {
   sourcePath: string | URL;
   exportName?: string;
-  propsTypeName?: string;
+  typeName?: string;
 };
 
 export type DomRenderProvider = SourceOptions & {
@@ -51,7 +51,7 @@ const omitProperties = (descriptor: ObjectDescriptor, keys: Set<string>): Object
 const providerDescriptor = (provider: DomRenderProvider): PropertyDescriptor => {
   const descriptor = analyzePropsDescriptor({
     exportName: provider.exportName,
-    propsTypeName: provider.propsTypeName,
+    typeName: provider.typeName,
     sourcePath: normalizePath(provider.sourcePath),
   });
   if (!isObjectDescriptor(descriptor)) {
@@ -101,7 +101,7 @@ const resolveAct = async () => {
   return ReactTestUtils.act;
 };
 
-export const createDomRender = <Props = any>(
+export const createReactDomRender = <Props = any>(
   options: DomRenderOptions = {},
 ): ComponentRenderStrategy<React.ComponentType<Props>, Props> => {
   const dom = createIsolatedDom({
@@ -164,5 +164,3 @@ export const createDomRender = <Props = any>(
     },
   };
 };
-
-export const createReactDomRender = createDomRender;

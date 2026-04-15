@@ -1,5 +1,6 @@
 import { describe, expect, test, vi } from "vitest";
-import { createSvelteRender, createVueDomRender } from "../src/index.js";
+import { createSvelteRender } from "../src/svelte.js";
+import { createVueDomRender } from "../src/vue.js";
 import SvelteBomb from "./fixtures/SvelteBomb.svelte";
 
 describe("framework render helpers", () => {

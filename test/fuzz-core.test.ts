@@ -146,7 +146,7 @@ describe("fuzz core branches", () => {
         schema: directOnlySchema,
       }),
     ).rejects.toThrow(
-      'schema vendor "custom" cannot generate props directly. pass sourcePath to use React/TypeScript props as the base shape',
+      'schema vendor "custom" cannot generate values directly. pass sourcePath to use TypeScript types as the base shape',
     );
   });
 
@@ -187,7 +187,7 @@ describe("fuzz core branches", () => {
         numRuns: 1,
         schema: impossibleSchema,
       }),
-    ).rejects.toThrow("failed to generate enough valid props from descriptor and schema");
+    ).rejects.toThrow("failed to generate enough valid values from descriptor and schema");
   });
 
   test("skips candidates that become invalid during fuzz execution", async () => {
@@ -287,7 +287,7 @@ describe("fuzz core branches", () => {
       }),
     ).rejects.toMatchObject({
       name: "ComponentFuzzError",
-      failingProps: {
+      failingValue: {
         count: 2,
         variant: "danger",
       },

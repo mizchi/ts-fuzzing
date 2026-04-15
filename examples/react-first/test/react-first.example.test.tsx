@@ -4,13 +4,15 @@ import path from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
 import * as z from "zod";
 import {
-  createDomRender,
+  createReactDomRender,
   fuzzReactComponent,
   fuzzReactComponentGuided,
   quickCheckReactComponent,
-  sampleProps,
-  samplePropsFromSchema,
-} from "props-fuzzing";
+} from "ts-fuzzing/react";
+import {
+  sampleValues,
+  sampleValuesFromSchema,
+} from "ts-fuzzing";
 import { BoundaryBadge } from "../src/BoundaryBadge.js";
 import { Button } from "../src/Button.js";
 import { EffectfulNotice } from "../src/EffectfulNotice.js";
@@ -26,7 +28,7 @@ const signupSchema = z.object({
 });
 
 const makeTempDir = () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "props-fuzzing-example-"));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ts-fuzzing-example-"));
   tempDirs.push(dir);
   return dir;
 };
@@ -38,10 +40,10 @@ afterEach(() => {
 });
 
 describe("react-first example project", () => {
-  test("react first: sampleProps and fuzzReactComponent", async () => {
-    const values = await sampleProps({
+  test("react first: sampleValues and fuzzReactComponent", async () => {
+    const values = await sampleValues({
       sourcePath: new URL("../src/Button.tsx", import.meta.url),
-      exportName: "Button",
+      typeName: "ButtonProps",
       numRuns: 4,
       seed: 7,
     });
@@ -67,13 +69,13 @@ describe("react-first example project", () => {
         component: EffectfulNotice,
         sourcePath: new URL("../src/EffectfulNotice.tsx", import.meta.url),
         exportName: "EffectfulNotice",
-        render: createDomRender(),
+        render: createReactDomRender(),
         numRuns: 32,
         seed: 5,
       }),
     ).rejects.toMatchObject({
       name: "ReactComponentFuzzError",
-      failingProps: {
+      failingValue: {
         mode: "danger",
       },
     });
@@ -86,7 +88,7 @@ describe("react-first example project", () => {
         sourcePath: new URL("../src/ThemePanel.tsx", import.meta.url),
         exportName: "ThemePanel",
         maxCases: 32,
-        render: createDomRender({
+        render: createReactDomRender({
           providers: [
             {
               key: "themeProvider",
@@ -100,7 +102,7 @@ describe("react-first example project", () => {
       }),
     ).rejects.toMatchObject({
       name: "ReactComponentFuzzError",
-      failingProps: {
+      failingValue: {
         providers: {
           themeProvider: {
             theme: "dark",
@@ -111,7 +113,7 @@ describe("react-first example project", () => {
   });
 
   test("schema から直接 props を作って normalized output を使える", async () => {
-    const values = await samplePropsFromSchema({
+    const values = await sampleValuesFromSchema({
       schema: signupSchema,
       numRuns: 6,
       seed: 2,
@@ -162,7 +164,7 @@ describe("react-first example project", () => {
       }),
     ).rejects.toMatchObject({
       name: "ReactComponentFuzzError",
-      failingProps: {
+      failingValue: {
         count: 2,
         variant: "danger",
       },

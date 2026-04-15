@@ -1,5 +1,5 @@
 {
-  "name": "ts-fuzzing-react-first-example",
+  "name": "ts-fuzzing-simple-example",
   "private": true,
   "type": "module",
   "scripts": {
@@ -9,10 +9,6 @@
   },
   "devDependencies": {
     "@types/node": "^24.9.1",
-    "@types/react": "^19.2.2",
-    "@types/react-dom": "^19.2.2",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
     "typescript": "^5.9.3",
     "vitest": "^4.0.0",
     "zod": "^4.0.0"

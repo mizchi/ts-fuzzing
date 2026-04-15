@@ -1,25 +1,47 @@
-export { analyzePropsDescriptor } from "./analyzer.js";
+export { analyzePropsDescriptor, analyzeTypeDescriptor } from "./analyzer.js";
 export { arbitraryFromDescriptor } from "./arbitrary.js";
 export { boundaryValuesFromDescriptor } from "./boundary.js";
-export { createDomRender, createReactDomRender } from "./dom.js";
-export type { DomRenderOptions, DomRenderProvider } from "./dom.js";
 export type {
   FuzzConstraints,
   ObjectDescriptor,
   PropertyDescriptor,
   TypeDescriptor,
 } from "./descriptor.js";
+export type {
+  Double,
+  Float,
+  Fuzz,
+  ISODateString,
+  Int,
+  Max,
+  MaxItems,
+  MaxLength,
+  Min,
+  MinItems,
+  MinLength,
+  Pattern,
+  ULID,
+  UUID,
+} from "./fuzz_markers.js";
 export {
   ComponentFuzzError,
+  ValueFuzzError,
   fuzzComponent,
   fuzzComponentGuided,
-  fuzzReactComponent,
-  fuzzReactComponentGuided,
+  fuzzValues,
+  fuzzValuesGuided,
   quickCheckComponent,
-  quickCheckReactComponent,
-  ReactComponentFuzzError,
+  quickCheckValues,
+  resolveFuzzData,
+  resolveInputDescriptor,
+  sampleBoundaryFuzzData,
+  sampleBoundaryValuesFromSchema,
+  sampleBoundaryValues,
   sampleBoundaryPropsFromSchema,
   sampleBoundaryProps,
+  sampleFuzzData,
+  sampleValuesFromSchema,
+  sampleValues,
   samplePropsFromSchema,
   sampleProps,
 } from "./fuzz.js";
@@ -30,17 +52,15 @@ export type {
   ComponentRenderStrategy,
   GuidedCoverageDiscovery,
   GuidedCoverageReport,
+  InputDescriptorTransform,
   QuickCheckReport,
+  ResolvedFuzzData,
   SchemaOptions,
-  ReactComponentRenderStrategy,
-  ReactComponentFuzzOptions,
-  ReactComponentGuidedFuzzOptions,
-  ReactComponentQuickCheckOptions,
+  ValueFuzzOptions,
+  ValueGuidedFuzzOptions,
+  ValueQuickCheckOptions,
+  ValueRunner,
   SourceOptions,
 } from "./fuzz.js";
 export { schemaSupportFromSchema } from "./schema.js";
 export type { StandardSchemaLike } from "./schema.js";
-export { createVueDomRender } from "./vue.js";
-export type { VueAppLike, VueDomRenderOptions } from "./vue.js";
-export { createSvelteRender } from "./svelte.js";
-export type { SvelteRenderOptions } from "./svelte.js";

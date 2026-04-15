@@ -1,16 +1,18 @@
 # React First Example
 
-This is a small React-first sample project for `props-fuzzing`. The executable docs live in [react-first.example.test.tsx](/Users/mz/ghq/github.com/mizchi/props-fuzzing/examples/react-first/test/react-first.example.test.tsx:1), which covers the main use cases:
+This is a small React-first sample project for `ts-fuzzing`. The executable docs live in [react-first.example.test.tsx](/Users/mz/ghq/github.com/mizchi/ts-fuzzing/examples/react-first/test/react-first.example.test.tsx:1), which covers the main use cases:
 
-- inspect generated values with `sampleProps()`
+- inspect generated values with `sampleValues()`
 - run standard property-based fuzzing with `fuzzReactComponent()`
-- catch mount-time failures with `createDomRender()`
-- fuzz provider props with `createDomRender({ providers })`
-- generate values directly from Zod with `samplePropsFromSchema()`
+- catch mount-time failures with `createReactDomRender()`
+- fuzz provider props with `createReactDomRender({ providers })`
+- generate values directly from Zod with `sampleValuesFromSchema()`
 - persist a corpus with `fuzzReactComponentGuided()`
 - run boundary-focused checks with `quickCheckReactComponent()`
 
-This folder is designed to be runnable inside the repository. It includes its own `package.json`, `tsconfig.json`, and `vitest.config.ts`, while resolving `props-fuzzing` to the local source tree through aliases.
+React-specific helpers are imported from `ts-fuzzing/react`.
+
+This folder is designed to be runnable inside the repository. It includes its own `package.json`, `tsconfig.json`, and `vitest.config.ts`, while resolving `ts-fuzzing` to the local source tree through aliases.
 
 ## Install
 
@@ -23,7 +25,7 @@ Requirements:
 - Node.js `24+`
 - ESM (`"type": "module"`)
 - `pnpm typecheck` in this example targets `src/`
-- if you copy this example into another repository, replace the local alias setup with the published `props-fuzzing` package
+- if you copy this example into another repository, replace the local alias setup with the published `ts-fuzzing` package
 
 ## Run
 
