@@ -1,0 +1,51 @@
+{
+  "name": "@mizchi/props-fuzzing",
+  "version": "0.1.0",
+  "description": "Type-driven props fuzzing for React components",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "test": "vitest run",
+    "test:watch": "vitest watch",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "keywords": [
+    "react",
+    "fuzzing",
+    "property-based-testing",
+    "typescript"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=24"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "dependencies": {
+    "fast-check": "^4.3.0",
+    "typescript": "^5.9.3"
+  },
+  "devDependencies": {
+    "@testing-library/react": "^16.3.2",
+    "@types/jsdom": "^28.0.1",
+    "@types/node": "^24.9.1",
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.2",
+    "jsdom": "^29.0.2",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "vitest": "^4.0.7"
+  },
+  "packageManager": "pnpm@10.33.0"
+}
