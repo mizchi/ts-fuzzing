@@ -2,11 +2,11 @@
 
 This is a small React-first sample project for `ts-fuzzing`. The executable docs live in [react-first.example.test.tsx](/Users/mz/ghq/github.com/mizchi/ts-fuzzing/examples/react-first/test/react-first.example.test.tsx:1), which covers the main use cases:
 
-- inspect generated values with `sampleValues()`
+- iterate generated values with `sampleValues()`
 - run standard property-based fuzzing with `fuzzReactComponent()`
 - catch mount-time failures with `createReactDomRender()`
 - fuzz provider props with `createReactDomRender({ providers })`
-- generate values directly from Zod with `sampleValuesFromSchema()`
+- iterate values directly from Zod with `sampleValuesFromSchema()`
 - persist a corpus with `fuzzReactComponentGuided()`
 - run boundary-focused checks with `quickCheckReactComponent()`
 

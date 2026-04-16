@@ -12,6 +12,7 @@ import {
   sampleProps,
   samplePropsFromSchema,
 } from "../src/index.js";
+import { collectAsync } from "./helpers/collect_async.js";
 
 const safeButtonPath = fileURLToPath(new URL("./fixtures/SafeButton.tsx", import.meta.url));
 const boundaryWidgetPath = fileURLToPath(new URL("./fixtures/BoundaryWidget.tsx", import.meta.url));
@@ -104,10 +105,10 @@ const alternatingSchema = () => {
 
 describe("fuzz core branches", () => {
   test("samples props from a string sourcePath with the default numRuns", async () => {
-    const values = await sampleProps({
+    const values = await collectAsync(sampleProps({
       sourcePath: safeButtonPath,
       exportName: "SafeButton",
-    });
+    }));
 
     expect(values).toHaveLength(10);
     expect(values.every((value) => typeof value.label === "string")).toBe(true);
@@ -128,52 +129,52 @@ describe("fuzz core branches", () => {
       ],
     };
 
-    const values = await sampleBoundaryProps({
+    const values = await collectAsync(sampleBoundaryProps({
       sourcePath: safeButtonPath,
       exportName: "SafeButton",
       render: {
         describeInput: () => descriptor,
         render: () => undefined,
       },
-    });
+    }));
 
     expect(values).toEqual([{ marker: "from-render" }]);
   });
 
   test("rejects schema-only vendors that cannot describe props directly", async () => {
     await expect(
-      sampleProps({
+      collectAsync(sampleProps({
         schema: directOnlySchema,
-      }),
+      })),
     ).rejects.toThrow(
       'schema vendor "custom" cannot generate values directly. pass sourcePath to use TypeScript types as the base shape',
     );
   });
 
   test("fails when neither sourcePath nor schema is provided", async () => {
-    await expect(sampleProps({} as never)).rejects.toThrow("sourcePath or schema is required");
+    await expect(collectAsync(sampleProps({} as never))).rejects.toThrow("sourcePath or schema is required");
   });
 
   test("samples props through the schema-only wrapper helpers", async () => {
-    const values = await samplePropsFromSchema({
+    const values = await collectAsync(samplePropsFromSchema({
       schema: z.object({
         label: z.string().min(1),
       }),
       numRuns: 4,
       seed: 2,
-    });
+    }));
 
     expect(values).toHaveLength(4);
     expect(values.every((value) => typeof value.label === "string")).toBe(true);
   });
 
   test("samples boundary values through the schema-only wrapper helpers", async () => {
-    const values = await sampleBoundaryPropsFromSchema({
+    const values = await collectAsync(sampleBoundaryPropsFromSchema({
       schema: z.object({
         label: z.string().min(1).max(2),
       }),
       maxCases: 8,
-    });
+    }));
 
     expect(values.length).toBeGreaterThan(0);
     expect(values.some((value) => value.label.length === 1)).toBe(true);
@@ -181,12 +182,12 @@ describe("fuzz core branches", () => {
 
   test("fails when schema filtering cannot produce enough valid samples", async () => {
     await expect(
-      sampleProps({
+      collectAsync(sampleProps({
         sourcePath: safeButtonPath,
         exportName: "SafeButton",
         numRuns: 1,
         schema: impossibleSchema,
-      }),
+      })),
     ).rejects.toThrow("failed to generate enough valid values from descriptor and schema");
   });
 

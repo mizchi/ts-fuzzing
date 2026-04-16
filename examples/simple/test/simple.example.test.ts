@@ -11,6 +11,13 @@ import {
 import { buildSearchPath, normalizeQuery, type SearchQuery } from "../src/SearchQuery.js";
 
 const searchQueryPath = new URL("../src/SearchQuery.ts", import.meta.url);
+const collectAsync = async <Value>(iterable: AsyncIterable<Value>) => {
+  const values: Value[] = [];
+  for await (const value of iterable) {
+    values.push(value);
+  }
+  return values;
+};
 
 const querySchema = z.object({
   page: z.coerce.number().int().min(1).max(3),
@@ -20,12 +27,12 @@ const querySchema = z.object({
 
 describe("simple example project", () => {
   test("samples values and fuzzes a plain callback", async () => {
-    const values = await sampleValues<SearchQuery>({
+    const values = await collectAsync(sampleValues<SearchQuery>({
       sourcePath: searchQueryPath,
       typeName: "SearchQuery",
       numRuns: 4,
       seed: 7,
-    });
+    }));
 
     expect(values).toHaveLength(4);
     expect(values.every((value) => typeof value.term === "string")).toBe(true);
@@ -68,22 +75,22 @@ describe("simple example project", () => {
   });
 
   test("sampleBoundaryValues surfaces the edge cases directly", async () => {
-    const values = await sampleBoundaryValues<SearchQuery>({
+    const values = await collectAsync(sampleBoundaryValues<SearchQuery>({
       sourcePath: searchQueryPath,
       typeName: "SearchQuery",
       maxCases: 16,
-    });
+    }));
 
     expect(values.some((value) => value.page === 1)).toBe(true);
     expect(values.some((value) => value.page === 5)).toBe(true);
   });
 
   test("samples normalized values directly from Zod", async () => {
-    const values = await sampleValuesFromSchema({
+    const values = await collectAsync(sampleValuesFromSchema({
       schema: querySchema,
       numRuns: 6,
       seed: 1,
-    });
+    }));
 
     expect(values).toHaveLength(6);
     for (const value of values) {

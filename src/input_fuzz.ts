@@ -117,6 +117,16 @@ const resolveDescribeInput = <Input>(run: ValueRunner<Input> | undefined) => {
   return run.describeInput;
 };
 
+const collectAsync = async <Value>(
+  iterable: AsyncIterable<Value>,
+): Promise<Value[]> => {
+  const values: Value[] = [];
+  for await (const value of iterable) {
+    values.push(value);
+  }
+  return values;
+};
+
 const inspectorPost = async <Result>(
   session: inspector.Session,
   method: string,
@@ -344,10 +354,10 @@ export const quickCheckValues = async <Input = unknown>(
   emitFuzzWarnings(resolved.warnings);
   const run = resolveRun(options.run);
   const describeInput = resolveDescribeInput(options.run);
-  const cases = sampleBoundaryFuzzData(resolved, {
+  const cases = await collectAsync(sampleBoundaryFuzzData(resolved, {
     describeInput,
     maxCases: options.maxCases ?? 64,
-  });
+  }));
 
   let checkedCases = 0;
   for (const candidate of cases) {

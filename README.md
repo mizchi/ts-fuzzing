@@ -10,7 +10,7 @@ Requirements:
 - ESM (`"type": "module"`)
 
 ```bash
-pnpm add -D ts-fuzzing
+pnpm add -D ts-fuzzing vitest
 
 # Optional schema support
 pnpm add -D zod valibot
@@ -26,8 +26,10 @@ pnpm add svelte
 ## Quick Start
 
 Use exported TypeScript types as the source of truth, then run a generic consumer callback with generated values.
+The examples below assume you are writing `vitest` test cases.
 
 ```ts
+import { expect, test } from "vitest";
 import { fuzzValues } from "ts-fuzzing";
 
 type SearchQuery = {
@@ -35,45 +37,58 @@ type SearchQuery = {
   term: string;
 };
 
-await fuzzValues<SearchQuery>({
-  sourcePath: new URL("./search.ts", import.meta.url),
-  typeName: "SearchQuery",
-  numRuns: 200,
-  seed: 42,
-  run(value) {
-    executeSearch(value);
-  },
+test("fuzzes a callback with values generated from a TypeScript type", async () => {
+  await expect(
+    fuzzValues<SearchQuery>({
+      sourcePath: new URL("./search.ts", import.meta.url),
+      typeName: "SearchQuery",
+      numRuns: 200,
+      seed: 42,
+      run(value) {
+        executeSearch(value);
+      },
+    }),
+  ).resolves.toBeUndefined();
 });
 ```
 
 Failures throw `ValueFuzzError`.
 
 ```ts
+import { expect, test } from "vitest";
 import { ValueFuzzError, fuzzValues } from "ts-fuzzing";
 
-try {
-  await fuzzValues<SearchQuery>({
-    sourcePath: new URL("./search.ts", import.meta.url),
-    typeName: "SearchQuery",
-    seed: 42,
-    run(value) {
-      executeSearch(value);
-    },
-  });
-} catch (error) {
-  if (error instanceof ValueFuzzError) {
-    console.error(error.failingValue);
-    console.error(error.seed);
-    console.error(error.warnings);
+test("inspects the minimized failing value", async () => {
+  expect.assertions(4);
+
+  try {
+    await fuzzValues<SearchQuery>({
+      sourcePath: new URL("./search.ts", import.meta.url),
+      typeName: "SearchQuery",
+      seed: 42,
+      run(value) {
+        executeSearch(value);
+      },
+    });
+  } catch (error) {
+    expect(error).toBeInstanceOf(ValueFuzzError);
+    if (error instanceof ValueFuzzError) {
+      expect(error.failingValue).toBeDefined();
+      expect(error.seed).toBe(42);
+      expect(error.warnings).toBeInstanceOf(Array);
+    }
   }
-}
+});
 ```
 
 ## Common Usage
 
 ### Sample generated values
 
+`sampleValues*` returns an async iterator. Consume it with `for await...of` when you want a snapshot in a test. Reuse the same `seed` to replay the same yielded sequence.
+
 ```ts
+import { expect, test } from "vitest";
 import { sampleValues } from "ts-fuzzing";
 
 type SearchQuery = {
@@ -81,26 +96,40 @@ type SearchQuery = {
   term: string;
 };
 
-const values = await sampleValues<SearchQuery>({
-  sourcePath: new URL("./search.ts", import.meta.url),
-  typeName: "SearchQuery",
-  numRuns: 8,
-  seed: 1,
+test("samples generated values for snapshot-like inspection", async () => {
+  const values: SearchQuery[] = [];
+  for await (const value of sampleValues<SearchQuery>({
+    sourcePath: new URL("./search.ts", import.meta.url),
+    typeName: "SearchQuery",
+    numRuns: 8,
+    seed: 1,
+  })) {
+    values.push(value);
+  }
+
+  expect(values).toHaveLength(8);
+  expect(values[0]).toHaveProperty("term");
 });
 ```
 
 ### Boundary-focused checks
 
 ```ts
+import { expect, test } from "vitest";
 import { quickCheckValues } from "ts-fuzzing";
 
-await quickCheckValues<SearchQuery>({
-  sourcePath: new URL("./search.ts", import.meta.url),
-  typeName: "SearchQuery",
-  maxCases: 64,
-  run(value) {
-    executeSearch(value);
-  },
+test("checks boundary-focused cases", async () => {
+  const report = await quickCheckValues<SearchQuery>({
+    sourcePath: new URL("./search.ts", import.meta.url),
+    typeName: "SearchQuery",
+    maxCases: 64,
+    run(value) {
+      executeSearch(value);
+    },
+  });
+
+  expect(report.checkedCases).toBeGreaterThan(0);
+  expect(report.totalCases).toBeGreaterThan(0);
 });
 ```
 
@@ -134,6 +163,7 @@ These hints affect fuzzing only. They do not validate runtime values by themselv
 ### Schema-driven values
 
 ```ts
+import { expect, test } from "vitest";
 import * as z from "zod";
 import { fuzzValues, sampleValuesFromSchema } from "ts-fuzzing";
 
@@ -142,19 +172,30 @@ const querySchema = z.object({
   page: z.number().int().min(1).max(10),
 });
 
-const values = await sampleValuesFromSchema({
-  schema: querySchema,
-  numRuns: 16,
-  seed: 1,
+test("generates normalized values directly from schema", async () => {
+  const values: Array<z.infer<typeof querySchema>> = [];
+  for await (const value of sampleValuesFromSchema({
+    schema: querySchema,
+    numRuns: 16,
+    seed: 1,
+  })) {
+    values.push(value);
+  }
+
+  expect(values).toHaveLength(16);
 });
 
-await fuzzValues({
-  schema: querySchema,
-  numRuns: 100,
-  seed: 1,
-  run(value) {
-    executeSearch(value);
-  },
+test("fuzzes a callback from schema output", async () => {
+  await expect(
+    fuzzValues({
+      schema: querySchema,
+      numRuns: 100,
+      seed: 1,
+      run(value) {
+        executeSearch(value);
+      },
+    }),
+  ).resolves.toBeUndefined();
 });
 ```
 
@@ -163,53 +204,68 @@ await fuzzValues({
 Use the React adapter when the consumer is a component rather than a plain callback.
 
 ```tsx
+import { expect, test } from "vitest";
 import { fuzzReactComponent } from "ts-fuzzing/react";
 import { Button } from "./Button.js";
 
-await fuzzReactComponent({
-  component: Button,
-  sourcePath: new URL("./Button.tsx", import.meta.url),
-  exportName: "Button",
-  numRuns: 200,
-  seed: 42,
+test("fuzzes a React component from its exported props type", async () => {
+  await expect(
+    fuzzReactComponent({
+      component: Button,
+      sourcePath: new URL("./Button.tsx", import.meta.url),
+      exportName: "Button",
+      numRuns: 200,
+      seed: 42,
+    }),
+  ).resolves.toBeUndefined();
 });
 ```
 
 By default React uses `renderToStaticMarkup`. Use `createReactDomRender()` if you need mount-time failures such as `useEffect` crashes.
 
 ```tsx
+import { expect, test } from "vitest";
 import { createReactDomRender, fuzzReactComponent } from "ts-fuzzing/react";
 
-await fuzzReactComponent({
-  component: EffectBomb,
-  sourcePath: new URL("./EffectBomb.tsx", import.meta.url),
-  exportName: "EffectBomb",
-  render: createReactDomRender(),
-  numRuns: 100,
-  seed: 1,
+test("catches mount-time React failures with the DOM renderer", async () => {
+  await expect(
+    fuzzReactComponent({
+      component: EffectBomb,
+      sourcePath: new URL("./EffectBomb.tsx", import.meta.url),
+      exportName: "EffectBomb",
+      render: createReactDomRender(),
+      numRuns: 100,
+      seed: 1,
+    }),
+  ).rejects.toThrow();
 });
 ```
 
 ### Provider fuzzing
 
 ```tsx
+import { expect, test } from "vitest";
 import { createReactDomRender, quickCheckReactComponent } from "ts-fuzzing/react";
 
-await quickCheckReactComponent({
-  component: ThemePanel,
-  sourcePath: new URL("./ThemePanel.tsx", import.meta.url),
-  exportName: "ThemePanel",
-  render: createReactDomRender({
-    providers: [
-      {
-        key: "themeProvider",
-        component: ThemeProvider,
-        sourcePath: new URL("./ThemeProvider.tsx", import.meta.url),
-        exportName: "ThemeProvider",
-        fixedProps: { locale: "en-US" },
-      },
-    ],
-  }),
+test("quick-checks provider and component inputs together", async () => {
+  const report = await quickCheckReactComponent({
+    component: ThemePanel,
+    sourcePath: new URL("./ThemePanel.tsx", import.meta.url),
+    exportName: "ThemePanel",
+    render: createReactDomRender({
+      providers: [
+        {
+          key: "themeProvider",
+          component: ThemeProvider,
+          sourcePath: new URL("./ThemeProvider.tsx", import.meta.url),
+          exportName: "ThemeProvider",
+          fixedProps: { locale: "en-US" },
+        },
+      ],
+    }),
+  });
+
+  expect(report.checkedCases).toBeGreaterThan(0);
 });
 ```
 
@@ -218,29 +274,39 @@ await quickCheckReactComponent({
 Use `fuzzComponent()` with a framework-specific renderer.
 
 ```ts
+import { expect, test } from "vitest";
 import Widget from "./Widget.vue";
 import { fuzzComponent } from "ts-fuzzing";
 import { createVueDomRender } from "ts-fuzzing/vue";
 
-await fuzzComponent({
-  component: Widget,
-  sourcePath: new URL("./Widget.vue", import.meta.url),
-  render: createVueDomRender(),
-  numRuns: 100,
-  seed: 1,
+test("fuzzes a Vue component through the generic component API", async () => {
+  await expect(
+    fuzzComponent({
+      component: Widget,
+      sourcePath: new URL("./Widget.vue", import.meta.url),
+      render: createVueDomRender(),
+      numRuns: 100,
+      seed: 1,
+    }),
+  ).resolves.toBeUndefined();
 });
 ```
 
 ```ts
+import { expect, test } from "vitest";
 import Widget from "./Widget.svelte";
 import { quickCheckComponent } from "ts-fuzzing";
 import { createSvelteRender } from "ts-fuzzing/svelte";
 
-await quickCheckComponent({
-  component: Widget,
-  sourcePath: new URL("./Widget.svelte", import.meta.url),
-  render: createSvelteRender(),
-  maxCases: 32,
+test("quick-checks a Svelte component through the generic component API", async () => {
+  const report = await quickCheckComponent({
+    component: Widget,
+    sourcePath: new URL("./Widget.svelte", import.meta.url),
+    render: createSvelteRender(),
+    maxCases: 32,
+  });
+
+  expect(report.checkedCases).toBeGreaterThan(0);
 });
 ```
 

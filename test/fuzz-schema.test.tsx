@@ -10,6 +10,7 @@ import {
   sampleBoundaryProps,
   sampleProps,
 } from "../src/index.js";
+import { collectAsync } from "./helpers/collect_async.js";
 import { BoundaryWidget } from "./fixtures/BoundaryWidget.js";
 import { ExplosiveCard } from "./fixtures/ExplosiveCard.js";
 import { SafeButton } from "./fixtures/SafeButton.js";
@@ -130,11 +131,11 @@ const transformedDirectSchema = z.object({
 
 describe("schema support", () => {
   test("samples props directly from a zod schema", async () => {
-    const values = await sampleProps({
+    const values = await collectAsync(sampleProps({
       schema: explosiveCardSchema,
       numRuns: 8,
       seed: 10,
-    });
+    }));
 
     expect(values).toHaveLength(8);
     for (const value of values) {
@@ -143,10 +144,10 @@ describe("schema support", () => {
   });
 
   test("samples boundary props directly from a valibot schema", async () => {
-    const values = await sampleBoundaryProps({
+    const values = await collectAsync(sampleBoundaryProps({
       schema: boundaryWidgetSchema,
       maxCases: 32,
-    });
+    }));
 
     expect(values.some((value) => value.count === 0)).toBe(true);
     expect(values.some((value) => value.count === 2)).toBe(true);
@@ -171,13 +172,13 @@ describe("schema support", () => {
   });
 
   test("filters library-type generation through a standard schema validator", async () => {
-    const values = await sampleProps({
+    const values = await collectAsync(sampleProps({
       sourcePath: new URL("./fixtures/SafeButton.tsx", import.meta.url),
       exportName: "SafeButton",
       schema: primaryOnlySchema,
       numRuns: 6,
       seed: 11,
-    });
+    }));
 
     expect(values).toHaveLength(6);
     for (const value of values) {
@@ -189,11 +190,11 @@ describe("schema support", () => {
   });
 
   test("returns normalized schema output from direct zod sampling", async () => {
-    const values = await sampleProps({
+    const values = await collectAsync(sampleProps({
       schema: transformedDirectSchema,
       numRuns: 8,
       seed: 4,
-    });
+    }));
 
     expect(values).toHaveLength(8);
     for (const value of values) {
@@ -204,13 +205,13 @@ describe("schema support", () => {
   });
 
   test("returns normalized schema output when sourcePath is combined with a standard schema", async () => {
-    const values = await sampleProps({
+    const values = await collectAsync(sampleProps({
       sourcePath: new URL("./fixtures/SafeButton.tsx", import.meta.url),
       exportName: "SafeButton",
       schema: transformingSafeButtonSchema,
       numRuns: 8,
       seed: 12,
-    });
+    }));
 
     expect(values).toHaveLength(8);
     for (const value of values) {
@@ -220,12 +221,12 @@ describe("schema support", () => {
   });
 
   test("returns normalized boundary cases when sourcePath is combined with a standard schema", async () => {
-    const values = await sampleBoundaryProps({
+    const values = await collectAsync(sampleBoundaryProps({
       sourcePath: new URL("./fixtures/SafeButton.tsx", import.meta.url),
       exportName: "SafeButton",
       schema: transformingSafeButtonSchema,
       maxCases: 32,
-    });
+    }));
 
     expect(values.length).toBeGreaterThan(0);
     for (const value of values) {
@@ -253,12 +254,12 @@ describe("schema support", () => {
 
   test("fails boundary sampling when schema filtering removes every case", async () => {
     await expect(
-      sampleBoundaryProps({
+      collectAsync(sampleBoundaryProps({
         sourcePath: new URL("./fixtures/SafeButton.tsx", import.meta.url),
         exportName: "SafeButton",
         schema: impossibleSafeButtonSchema,
         maxCases: 32,
-      }),
+      })),
     ).rejects.toThrow("schema filtering removed every boundary case");
   });
 
