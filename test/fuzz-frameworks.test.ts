@@ -4,7 +4,6 @@ import {
   quickCheckComponent,
   sampleProps,
 } from "../src/index.js";
-import { collectAsync } from "./helpers/collect_async.js";
 import { createSvelteRender } from "../src/svelte.js";
 import { createVueDomRender } from "../src/vue.js";
 import SvelteBomb from "./fixtures/SvelteBomb.svelte";
@@ -62,11 +61,14 @@ describe("cross-framework fuzzing", () => {
   });
 
   test("samples runtime Vue props directly from a SFC", async () => {
-    const values = await collectAsync(sampleProps({
+    const values: Array<Record<string, any>> = [];
+    for await (const value of sampleProps({
       sourcePath: new URL("./fixtures/VueRuntimeBomb.vue", import.meta.url),
       numRuns: 8,
       seed: 9,
-    }));
+    })) {
+      values.push(value);
+    }
 
     expect(values).toHaveLength(8);
     for (const value of values) {
@@ -92,11 +94,14 @@ describe("cross-framework fuzzing", () => {
   });
 
   test("samples Svelte runes props directly from a component source", async () => {
-    const values = await collectAsync(sampleProps({
+    const values: Array<Record<string, any>> = [];
+    for await (const value of sampleProps({
       sourcePath: new URL("./fixtures/SvelteRunesBomb.svelte", import.meta.url),
       numRuns: 8,
       seed: 5,
-    }));
+    })) {
+      values.push(value);
+    }
 
     expect(values).toHaveLength(8);
     for (const value of values) {

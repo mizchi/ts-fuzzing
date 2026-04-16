@@ -5,7 +5,6 @@ import {
   sampleBoundaryValues,
   sampleValues,
 } from "../../src/index.js";
-import { collectAsync } from "../helpers/collect_async.js";
 import {
   createReactDomRender,
   fuzzReactComponent,
@@ -21,19 +20,25 @@ type SafeButtonProps = {
 const safeButtonPath = fileURLToPath(new URL("../fixtures/SafeButton.tsx", import.meta.url));
 
 async function verifySourceBackedTyping() {
-  const sampled = await collectAsync(sampleValues<SafeButtonProps>({
+  const sampled: SafeButtonProps[] = [];
+  for await (const value of sampleValues<SafeButtonProps>({
     sourcePath: safeButtonPath,
     typeName: "SafeButtonProps",
     numRuns: 2,
-  }));
+  })) {
+    sampled.push(value);
+  }
   sampled[0]?.label satisfies string;
   sampled[0]?.variant satisfies "ghost" | "primary";
 
-  const boundary = await collectAsync(sampleBoundaryValues<SafeButtonProps>({
+  const boundary: SafeButtonProps[] = [];
+  for await (const value of sampleBoundaryValues<SafeButtonProps>({
     sourcePath: safeButtonPath,
     typeName: "SafeButtonProps",
     maxCases: 4,
-  }));
+  })) {
+    boundary.push(value);
+  }
   boundary[0]?.label satisfies string;
 
   await fuzzValues<SafeButtonProps>({

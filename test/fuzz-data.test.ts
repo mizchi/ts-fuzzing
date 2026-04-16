@@ -6,7 +6,6 @@ import {
   sampleBoundaryFuzzData,
   sampleFuzzData,
 } from "../src/index.js";
-import { collectAsync } from "./helpers/collect_async.js";
 
 const safeButtonPath = fileURLToPath(new URL("./fixtures/SafeButton.tsx", import.meta.url));
 
@@ -17,10 +16,13 @@ describe("fuzz data core", () => {
       exportName: "SafeButton",
     });
 
-    const values = await collectAsync(sampleFuzzData(resolved, {
+    const values: unknown[] = [];
+    for await (const value of sampleFuzzData(resolved, {
       numRuns: 3,
       seed: 7,
-    }));
+    })) {
+      values.push(value);
+    }
 
     expect(resolved.componentDescriptor.kind).toBe("object");
     expect(values).toHaveLength(3);
@@ -33,7 +35,8 @@ describe("fuzz data core", () => {
       exportName: "SafeButton",
     });
 
-    const values = await collectAsync(sampleBoundaryFuzzData(resolved, {
+    const values: unknown[] = [];
+    for await (const value of sampleBoundaryFuzzData(resolved, {
       describeInput: () => ({
         kind: "object",
         properties: [
@@ -54,7 +57,9 @@ describe("fuzz data core", () => {
         ],
       }),
       maxCases: 8,
-    }));
+    })) {
+      values.push(value);
+    }
 
     expect(values).toEqual([{ provider: { theme: "light" } }]);
   });
@@ -66,10 +71,13 @@ describe("fuzz data core", () => {
       }),
     });
 
-    const values = await collectAsync(sampleFuzzData(resolved, {
+    const values: unknown[] = [];
+    for await (const value of sampleFuzzData(resolved, {
       numRuns: 4,
       seed: 2,
-    }));
+    })) {
+      values.push(value);
+    }
 
     expect(values).toHaveLength(4);
     for (const value of values) {
