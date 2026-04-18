@@ -1,8 +1,9 @@
 name: release-please
 
+# Manual trigger only. Release timing is an explicit maintainer decision.
+# Run via Actions UI or: gh workflow run release-please.yml
 on:
-  push:
-    branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
