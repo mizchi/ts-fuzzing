@@ -14,7 +14,7 @@ import {
   sampleValuesFromSchema,
 } from "ts-fuzzing";
 import { BoundaryBadge } from "../src/BoundaryBadge.js";
-import { Button } from "../src/Button.js";
+import { Button, type ButtonProps } from "../src/Button.js";
 import { EffectfulNotice } from "../src/EffectfulNotice.js";
 import { SignupCard } from "../src/SignupCard.js";
 import { ThemePanel, ThemeProvider } from "../src/ThemePanel.js";
@@ -41,12 +41,15 @@ afterEach(() => {
 
 describe("react-first example project", () => {
   test("react first: sampleValues and fuzzReactComponent", async () => {
-    const values = await sampleValues({
+    const values: ButtonProps[] = [];
+    for await (const value of sampleValues<ButtonProps>({
       sourcePath: new URL("../src/Button.tsx", import.meta.url),
       typeName: "ButtonProps",
       numRuns: 4,
       seed: 7,
-    });
+    })) {
+      values.push(value);
+    }
 
     expect(values).toHaveLength(4);
     expect(values.every((value) => typeof value.label === "string")).toBe(true);
@@ -113,11 +116,14 @@ describe("react-first example project", () => {
   });
 
   test("schema から直接 props を作って normalized output を使える", async () => {
-    const values = await sampleValuesFromSchema({
+    const values: Array<z.infer<typeof signupSchema>> = [];
+    for await (const value of sampleValuesFromSchema({
       schema: signupSchema,
       numRuns: 6,
       seed: 2,
-    });
+    })) {
+      values.push(value);
+    }
 
     expect(values).toHaveLength(6);
     for (const value of values) {

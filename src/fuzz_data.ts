@@ -9,6 +9,7 @@ import type { StandardSchemaLike } from "./schema.js";
 import { schemaSupportFromSchema } from "./schema.js";
 
 type SchemaOutput<Schema extends StandardSchemaLike> = StandardSchemaV1.InferOutput<Schema>;
+export type FuzzValueIterator<Value = unknown> = AsyncIterableIterator<Value>;
 
 export type SourceOptions = {
   sourcePath?: string | URL;
@@ -140,6 +141,23 @@ const normalizeFuzzValues = <Value>(
   return normalized;
 };
 
+const nextSeed = (seed: number | undefined, offset: number) => {
+  if (seed === undefined) {
+    return undefined;
+  }
+  return seed + offset;
+};
+
+const sampleSingleValue = <Value>(
+  arbitrary: fc.Arbitrary<Value>,
+  seed: number | undefined,
+) => {
+  return fc.sample(arbitrary, {
+    numRuns: 1,
+    seed,
+  })[0];
+};
+
 export const sampleFuzzData = (
   resolved: ResolvedFuzzData,
   options: {
@@ -147,44 +165,37 @@ export const sampleFuzzData = (
     numRuns: number;
     seed?: number;
   },
-) => {
+): FuzzValueIterator<unknown> => {
   const descriptor = resolveInputDescriptor(resolved.valueDescriptor, options.describeInput);
+  const arbitrary = arbitraryFromDescriptor(descriptor) as fc.Arbitrary<unknown>;
 
-  if (!resolved.schemaSupport) {
-    return fc.sample(arbitraryFromDescriptor(descriptor), {
-      numRuns: options.numRuns,
-      seed: options.seed,
-    }) as unknown[];
-  }
+  return (async function* () {
+    if (!resolved.schemaSupport) {
+      for (let index = 0; index < options.numRuns; index += 1) {
+        yield sampleSingleValue(arbitrary, nextSeed(options.seed, index));
+      }
+      return;
+    }
 
-  const values: unknown[] = [];
-  let batchSeed = options.seed;
-  let attempts = 0;
+    let yielded = 0;
+    let attempts = 0;
+    const maxAttempts = options.numRuns * 16;
 
-  while (values.length < options.numRuns && attempts < options.numRuns * 16) {
-    const batch = fc.sample(arbitraryFromDescriptor(descriptor), {
-      numRuns: Math.max(options.numRuns * 2, 16),
-      seed: batchSeed,
-    });
-    for (const value of batch) {
-      const result = resolved.schemaSupport.normalizeSync(value);
+    while (yielded < options.numRuns && attempts < maxAttempts) {
+      const candidate = sampleSingleValue(arbitrary, nextSeed(options.seed, attempts));
+      attempts += 1;
+      const result = resolved.schemaSupport.normalizeSync(candidate);
       if (!result.ok) {
         continue;
       }
-      values.push(result.value);
-      if (values.length >= options.numRuns) {
-        break;
-      }
+      yielded += 1;
+      yield result.value;
     }
-    attempts += 1;
-    batchSeed = batchSeed === undefined ? undefined : batchSeed + 1;
-  }
 
-  if (values.length < options.numRuns) {
-    throw new Error("failed to generate enough valid values from descriptor and schema");
-  }
-
-  return values;
+    if (yielded < options.numRuns) {
+      throw new Error("failed to generate enough valid values from descriptor and schema");
+    }
+  })();
 };
 
 export const sampleBoundaryFuzzData = (
@@ -193,31 +204,39 @@ export const sampleBoundaryFuzzData = (
     describeInput?: InputDescriptorTransform;
     maxCases: number;
   },
-) => {
+): FuzzValueIterator<unknown> => {
   const descriptor = resolveInputDescriptor(resolved.valueDescriptor, options.describeInput);
-  const rawCases = boundaryValuesFromDescriptor(descriptor, options.maxCases);
-  const cases = normalizeFuzzValues(rawCases, resolved.schemaSupport);
-  if (rawCases.length > 0 && cases.length === 0 && resolved.schemaSupport) {
-    throw new Error("schema filtering removed every boundary case");
-  }
-  return cases.map((entry) => entry.normalized);
+  return (async function* () {
+    const rawCases = boundaryValuesFromDescriptor(descriptor, options.maxCases);
+    const cases = normalizeFuzzValues(rawCases, resolved.schemaSupport);
+    if (rawCases.length > 0 && cases.length === 0 && resolved.schemaSupport) {
+      throw new Error("schema filtering removed every boundary case");
+    }
+    for (const entry of cases) {
+      yield entry.normalized;
+    }
+  })();
 };
 
 export function sampleValues<Schema extends StandardSchemaLike>(
   options: { schema: Schema; sourcePath?: undefined; numRuns?: number; seed?: number },
-): Promise<Array<SchemaOutput<Schema>>>;
+): FuzzValueIterator<SchemaOutput<Schema>>;
 export function sampleValues<Input = Record<string, any>>(
   options: SourceBackedOptions & { numRuns?: number; seed?: number; schema?: StandardSchemaLike },
-): Promise<Array<Input>>;
-export async function sampleValues(
+): FuzzValueIterator<Input>;
+export function sampleValues(
   options: SourceOptions & { numRuns?: number; seed?: number; schema?: StandardSchemaLike },
-): Promise<Array<Record<string, any>>> {
-  const resolved = resolveFuzzData(options);
-  emitFuzzWarnings(resolved.warnings);
-  return sampleFuzzData(resolved, {
-    numRuns: options.numRuns ?? 10,
-    seed: options.seed,
-  }) as Array<Record<string, any>>;
+): FuzzValueIterator<Record<string, any>> {
+  return (async function* () {
+    const resolved = resolveFuzzData(options);
+    emitFuzzWarnings(resolved.warnings);
+    for await (const value of sampleFuzzData(resolved, {
+      numRuns: options.numRuns ?? 10,
+      seed: options.seed,
+    })) {
+      yield value as Record<string, any>;
+    }
+  })();
 }
 
 export function sampleBoundaryValues<Schema extends StandardSchemaLike>(
@@ -227,7 +246,7 @@ export function sampleBoundaryValues<Schema extends StandardSchemaLike>(
     schema: Schema;
     sourcePath?: undefined;
   },
-): Promise<Array<SchemaOutput<Schema>>>;
+): FuzzValueIterator<SchemaOutput<Schema>>;
 export function sampleBoundaryValues<Input = Record<string, any>>(
   options: SourceBackedOptions & {
     describeInput?: InputDescriptorTransform;
@@ -235,47 +254,51 @@ export function sampleBoundaryValues<Input = Record<string, any>>(
     render?: DescribeInputCarrier;
     schema?: StandardSchemaLike;
   },
-): Promise<Array<Input>>;
-export async function sampleBoundaryValues(
+): FuzzValueIterator<Input>;
+export function sampleBoundaryValues(
   options: SourceOptions & {
     describeInput?: InputDescriptorTransform;
     maxCases?: number;
     render?: DescribeInputCarrier;
     schema?: StandardSchemaLike;
   },
-): Promise<Array<Record<string, any>>> {
-  const resolved = resolveFuzzData(options);
-  emitFuzzWarnings(resolved.warnings);
-  return sampleBoundaryFuzzData(resolved, {
-    describeInput:
-      options.describeInput ??
-      (typeof options.render === "function" ? undefined : options.render?.describeInput),
-    maxCases: options.maxCases ?? 64,
-  }) as Array<Record<string, any>>;
+): FuzzValueIterator<Record<string, any>> {
+  return (async function* () {
+    const resolved = resolveFuzzData(options);
+    emitFuzzWarnings(resolved.warnings);
+    for await (const value of sampleBoundaryFuzzData(resolved, {
+      describeInput:
+        options.describeInput ??
+        (typeof options.render === "function" ? undefined : options.render?.describeInput),
+      maxCases: options.maxCases ?? 64,
+    })) {
+      yield value as Record<string, any>;
+    }
+  })();
 }
 
-export const sampleValuesFromSchema = async <Schema extends StandardSchemaLike>(
+export const sampleValuesFromSchema = <Schema extends StandardSchemaLike>(
   options: { schema: Schema; numRuns?: number; seed?: number },
-): Promise<Array<SchemaOutput<Schema>>> => {
+): FuzzValueIterator<SchemaOutput<Schema>> => {
   return sampleValues(options);
 };
 
-export const sampleBoundaryValuesFromSchema = async <Schema extends StandardSchemaLike>(
+export const sampleBoundaryValuesFromSchema = <Schema extends StandardSchemaLike>(
   options: { schema: Schema; maxCases?: number },
-): Promise<Array<SchemaOutput<Schema>>> => {
+): FuzzValueIterator<SchemaOutput<Schema>> => {
   return sampleBoundaryValues(options);
 };
 
 export function sampleProps<Schema extends StandardSchemaLike>(
   options: { schema: Schema; sourcePath?: undefined; numRuns?: number; seed?: number },
-): Promise<Array<SchemaOutput<Schema>>>;
+): FuzzValueIterator<SchemaOutput<Schema>>;
 export function sampleProps<Props = Record<string, any>>(
   options: SourceBackedOptions & { numRuns?: number; seed?: number; schema?: StandardSchemaLike },
-): Promise<Array<Props>>;
-export async function sampleProps(
+): FuzzValueIterator<Props>;
+export function sampleProps(
   options: SourceOptions & { numRuns?: number; seed?: number; schema?: StandardSchemaLike },
-): Promise<Array<Record<string, any>>> {
-  return sampleValues(options as any) as Promise<Array<Record<string, any>>>;
+): FuzzValueIterator<Record<string, any>> {
+  return sampleValues(options as any) as FuzzValueIterator<Record<string, any>>;
 }
 
 export function sampleBoundaryProps<Schema extends StandardSchemaLike>(
@@ -285,7 +308,7 @@ export function sampleBoundaryProps<Schema extends StandardSchemaLike>(
     schema: Schema;
     sourcePath?: undefined;
   },
-): Promise<Array<SchemaOutput<Schema>>>;
+): FuzzValueIterator<SchemaOutput<Schema>>;
 export function sampleBoundaryProps<Props = Record<string, any>>(
   options: SourceBackedOptions & {
     describeInput?: InputDescriptorTransform;
@@ -293,26 +316,26 @@ export function sampleBoundaryProps<Props = Record<string, any>>(
     render?: DescribeInputCarrier;
     schema?: StandardSchemaLike;
   },
-): Promise<Array<Props>>;
-export async function sampleBoundaryProps(
+): FuzzValueIterator<Props>;
+export function sampleBoundaryProps(
   options: SourceOptions & {
     describeInput?: InputDescriptorTransform;
     maxCases?: number;
     render?: DescribeInputCarrier;
     schema?: StandardSchemaLike;
   },
-): Promise<Array<Record<string, any>>> {
-  return sampleBoundaryValues(options as any) as Promise<Array<Record<string, any>>>;
+): FuzzValueIterator<Record<string, any>> {
+  return sampleBoundaryValues(options as any) as FuzzValueIterator<Record<string, any>>;
 }
 
-export const samplePropsFromSchema = async <Schema extends StandardSchemaLike>(
+export const samplePropsFromSchema = <Schema extends StandardSchemaLike>(
   options: { schema: Schema; numRuns?: number; seed?: number },
-): Promise<Array<SchemaOutput<Schema>>> => {
+): FuzzValueIterator<SchemaOutput<Schema>> => {
   return sampleValuesFromSchema(options);
 };
 
-export const sampleBoundaryPropsFromSchema = async <Schema extends StandardSchemaLike>(
+export const sampleBoundaryPropsFromSchema = <Schema extends StandardSchemaLike>(
   options: { schema: Schema; maxCases?: number },
-): Promise<Array<SchemaOutput<Schema>>> => {
+): FuzzValueIterator<SchemaOutput<Schema>> => {
   return sampleBoundaryValuesFromSchema(options);
 };

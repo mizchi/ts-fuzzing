@@ -21,12 +21,15 @@ import { SafeButton } from "./fixtures/SafeButton.js";
 
 describe("ts-fuzzing", () => {
   test("samples props from a component props type", async () => {
-    const values = await sampleProps({
+    const values: Array<Record<string, any>> = [];
+    for await (const value of sampleProps({
       sourcePath: new URL("./fixtures/SafeButton.tsx", import.meta.url),
       exportName: "SafeButton",
       numRuns: 5,
       seed: 7,
-    });
+    })) {
+      values.push(value);
+    }
 
     expect(values).toHaveLength(5);
     for (const value of values) {
@@ -46,12 +49,15 @@ describe("ts-fuzzing", () => {
   });
 
   test("generates domain-aware values for email and url patterns", async () => {
-    const values = await sampleProps({
+    const values: Array<Record<string, any>> = [];
+    for await (const value of sampleProps({
       sourcePath: new URL("./fixtures/ContactCard.tsx", import.meta.url),
       exportName: "ContactCard",
       numRuns: 8,
       seed: 12,
-    });
+    })) {
+      values.push(value);
+    }
 
     expect(values).toHaveLength(8);
     for (const value of values) {
@@ -63,11 +69,14 @@ describe("ts-fuzzing", () => {
   });
 
   test("samples boundary props from constraints", async () => {
-    const values = await sampleBoundaryProps({
+    const values: Array<Record<string, any>> = [];
+    for await (const value of sampleBoundaryProps({
       sourcePath: new URL("./fixtures/BoundaryWidget.tsx", import.meta.url),
       exportName: "BoundaryWidget",
       maxCases: 32,
-    });
+    })) {
+      values.push(value);
+    }
 
     expect(values.some((value) => value.count === 0)).toBe(true);
     expect(values.some((value) => value.count === 2)).toBe(true);

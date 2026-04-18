@@ -344,10 +344,13 @@ export const quickCheckValues = async <Input = unknown>(
   emitFuzzWarnings(resolved.warnings);
   const run = resolveRun(options.run);
   const describeInput = resolveDescribeInput(options.run);
-  const cases = sampleBoundaryFuzzData(resolved, {
+  const cases: unknown[] = [];
+  for await (const value of sampleBoundaryFuzzData(resolved, {
     describeInput,
     maxCases: options.maxCases ?? 64,
-  });
+  })) {
+    cases.push(value);
+  }
 
   let checkedCases = 0;
   for (const candidate of cases) {

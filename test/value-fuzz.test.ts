@@ -20,12 +20,15 @@ afterEach(() => {
 
 describe("generic value fuzzing", () => {
   test("samples values from exported TypeScript types", async () => {
-    const values = await sampleValues({
+    const values: Array<Record<string, any>> = [];
+    for await (const value of sampleValues({
       sourcePath: safeButtonPath,
       typeName: "SafeButtonProps",
       numRuns: 3,
       seed: 7,
-    });
+    })) {
+      values.push(value);
+    }
 
     expect(values).toHaveLength(3);
     expect(values.every((value) => typeof value.label === "string")).toBe(true);
@@ -84,11 +87,14 @@ describe("generic value fuzzing", () => {
   });
 
   test("samples generic boundary values through the generic API", async () => {
-    const values = await sampleBoundaryValues({
+    const values: Array<Record<string, any>> = [];
+    for await (const value of sampleBoundaryValues({
       sourcePath: safeButtonPath,
       typeName: "SafeButtonProps",
       maxCases: 8,
-    });
+    })) {
+      values.push(value);
+    }
 
     expect(values.length).toBeGreaterThan(0);
     expect(values[0]).toBeDefined();
@@ -98,12 +104,14 @@ describe("generic value fuzzing", () => {
     const emitWarning = vi.spyOn(process, "emitWarning").mockImplementation(() => undefined);
     const genericPath = fileURLToPath(new URL("./fixtures/GenericBox.ts", import.meta.url));
 
-    await sampleValues({
+    for await (const _ of sampleValues({
       sourcePath: genericPath,
       typeName: "Box",
       numRuns: 2,
       seed: 1,
-    });
+    })) {
+      // exhaust iterator to trigger warnings
+    }
 
     expect(emitWarning).toHaveBeenCalledWith(
       expect.stringContaining('generic type parameter "T" is unconstrained'),
@@ -114,18 +122,22 @@ describe("generic value fuzzing", () => {
     const emitWarning = vi.spyOn(process, "emitWarning").mockImplementation(() => undefined);
     const genericPath = fileURLToPath(new URL("./fixtures/GenericBox.ts", import.meta.url));
 
-    await sampleValues({
+    for await (const _ of sampleValues({
       sourcePath: genericPath,
       typeName: "Box",
       numRuns: 1,
       seed: 1,
-    });
-    await sampleValues({
+    })) {
+      // exhaust iterator to trigger warnings
+    }
+    for await (const _ of sampleValues({
       sourcePath: genericPath,
       typeName: "Box",
       numRuns: 1,
       seed: 2,
-    });
+    })) {
+      // exhaust iterator to trigger warnings
+    }
 
     expect(
       emitWarning.mock.calls.filter(([message]) =>
@@ -134,13 +146,47 @@ describe("generic value fuzzing", () => {
     ).toHaveLength(2);
   });
 
+  test("keeps seeded iterators deterministic", async () => {
+    const first: Array<Record<string, unknown>> = [];
+    for await (const value of sampleValues({
+      sourcePath: safeButtonPath,
+      typeName: "SafeButtonProps",
+      numRuns: 4,
+      seed: 19,
+    })) {
+      first.push(value);
+    }
+    const second: Array<Record<string, unknown>> = [];
+    for await (const value of sampleValues({
+      sourcePath: safeButtonPath,
+      typeName: "SafeButtonProps",
+      numRuns: 4,
+      seed: 19,
+    })) {
+      second.push(value);
+    }
+
+    const snapshot = (values: Array<Record<string, unknown>>) =>
+      values.map((value) => ({
+        count: value.count,
+        hasOnClick: typeof value.onClick === "function",
+        label: value.label,
+        variant: value.variant,
+      }));
+
+    expect(snapshot(second)).toEqual(snapshot(first));
+  });
+
   test("samples values from ts-fuzzing marker hints", async () => {
-    const values = await sampleValues({
+    const values: Array<Record<string, any>> = [];
+    for await (const value of sampleValues({
       sourcePath: fuzzHintsPath,
       typeName: "FuzzHints",
       numRuns: 4,
       seed: 11,
-    });
+    })) {
+      values.push(value);
+    }
 
     expect(values).toHaveLength(4);
     expect(values.every((value) => /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value.id))).toBe(true);
@@ -154,19 +200,23 @@ describe("generic value fuzzing", () => {
   });
 
   test("samples values from generalized conditional types", async () => {
-    const values = await sampleValues({
+    const values: Array<Record<string, any>> = [];
+    for await (const value of sampleValues({
       sourcePath: conditionalTypesPath,
       typeName: "WrappedGeneric",
       numRuns: 12,
       seed: 13,
-    });
+    })) {
+      values.push(value);
+    }
 
     expect(values.some((value) => "value" in value && typeof value.value === "string")).toBe(true);
     expect(values.some((value) => "items" in value && Array.isArray(value.items))).toBe(true);
   });
 
   test("accepts describeInput directly when sampling boundary values", async () => {
-    const values = await sampleBoundaryValues<{ provider: { theme: "light" } }>({
+    const values: Array<{ provider: { theme: "light" } }> = [];
+    for await (const value of sampleBoundaryValues<{ provider: { theme: "light" } }>({
       sourcePath: safeButtonPath,
       typeName: "SafeButtonProps",
       describeInput: () => ({
@@ -189,7 +239,9 @@ describe("generic value fuzzing", () => {
         ],
       }),
       maxCases: 4,
-    });
+    })) {
+      values.push(value);
+    }
 
     expect(values).toEqual([{ provider: { theme: "light" } }]);
   });
