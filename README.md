@@ -325,3 +325,5 @@ test("quick-checks a Svelte component through the generic component API", async 
 - Runnable non-UI example: [examples/simple/README.md](/Users/mz/ghq/github.com/mizchi/ts-fuzzing/examples/simple/README.md:1)
 - Runnable React adapter example: [examples/react-first/README.md](/Users/mz/ghq/github.com/mizchi/ts-fuzzing/examples/react-first/README.md:1)
 - Design notes and implementation details: [docs/architecture.md](/Users/mz/ghq/github.com/mizchi/ts-fuzzing/docs/architecture.md:1)
+
+<!-- release automation bootstrapped -->
