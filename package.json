@@ -39,6 +39,18 @@
     "schema"
   ],
   "license": "MIT",
+  "author": "mizchi",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mizchi/ts-fuzzing.git"
+  },
+  "homepage": "https://github.com/mizchi/ts-fuzzing#readme",
+  "bugs": {
+    "url": "https://github.com/mizchi/ts-fuzzing/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "engines": {
     "node": ">=24"
   },
