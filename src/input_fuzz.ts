@@ -32,8 +32,10 @@ export type ValueRunner<Input = unknown> =
 
 export type ValueFuzzOptions<Input = unknown, Schema extends StandardSchemaLike = StandardSchemaLike> = SourceOptions & SchemaOptions<Schema> & {
   numRuns?: number;
+  perRunTimeoutMs?: number;
   run: ValueRunner<Input>;
   seed?: number;
+  timeoutMs?: number;
 };
 
 export type GuidedCoverageReport = {
@@ -198,8 +200,11 @@ export const fuzzValues = async <Input = unknown>(
       }),
       {
         endOnFailure: true,
+        interruptAfterTimeLimit: options.timeoutMs,
+        markInterruptAsFailure: false,
         numRuns: options.numRuns ?? 100,
         seed: options.seed,
+        timeout: options.perRunTimeoutMs,
       },
     );
   } catch (error) {

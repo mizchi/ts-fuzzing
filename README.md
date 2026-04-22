@@ -310,6 +310,129 @@ test("quick-checks a Svelte component through the generic component API", async 
 });
 ```
 
+### Invariant helpers
+
+`fuzzRoundtrip` and `fuzzIdempotent` skip the ceremony for the two most common property shapes.
+
+```ts
+import { expect, test } from "vitest";
+import * as z from "zod";
+import { fuzzIdempotent, fuzzRoundtrip } from "ts-fuzzing";
+
+const record = z.object({ name: z.string().min(1).max(16) });
+
+test("JSON encode/decode roundtrips", async () => {
+  await expect(
+    fuzzRoundtrip({
+      schema: record,
+      numRuns: 100,
+      encode(value) { return JSON.stringify(value); },
+      decode(text) { return JSON.parse(text); },
+    }),
+  ).resolves.toBeUndefined();
+});
+
+test("trim is idempotent", async () => {
+  await expect(
+    fuzzIdempotent({
+      schema: z.object({ text: z.string().max(8) }),
+      apply(value) { return { text: value.text.trim() }; },
+    }),
+  ).resolves.toBeUndefined();
+});
+```
+
+### Differential testing
+
+`fuzzDifferential` runs two implementations against the same generated input and reports the first divergence.
+
+```ts
+import { fuzzDifferential } from "ts-fuzzing";
+
+await fuzzDifferential({
+  schema: inputSchema,
+  implementations: [legacyImpl, rewriteImpl],
+  names: ["legacy", "rewrite"],
+  numRuns: 200,
+});
+```
+
+### Stateful / command sequence fuzzing
+
+`fuzzStateful` generates a random sequence of actions, runs each against a reference model and the real implementation, and checks an invariant after every step.
+
+```ts
+import fc from "fast-check";
+import { fuzzStateful } from "ts-fuzzing";
+
+await fuzzStateful<{ items: number[] }, RealStack>({
+  setup: () => ({ model: { items: [] }, real: new RealStack() }),
+  actions: [
+    {
+      name: "push",
+      generate: fc.integer(),
+      apply({ model, real, input }) {
+        model.items.push(input);
+        real.push(input);
+      },
+    },
+    {
+      name: "pop",
+      precondition: (model) => model.items.length > 0,
+      apply({ model, real }) {
+        model.items.pop();
+        real.pop();
+      },
+    },
+  ],
+  invariant({ model, real }) {
+    if (model.items.length !== real.size()) {
+      throw new Error("length diverged");
+    }
+  },
+  maxActions: 40,
+  numRuns: 100,
+});
+```
+
+Failures surface as `StatefulFuzzError` with a `failingTrace` describing the applied actions.
+
+### Minimal repro export
+
+When a run fails, `renderReproTest` / `writeReproTest` turn the caught `ValueFuzzError` into a standalone test file so you can commit the failing input as a regression.
+
+```ts
+import { ValueFuzzError, fuzzValues, writeReproTest } from "ts-fuzzing";
+
+try {
+  await fuzzValues({ schema, run: executeSearch });
+} catch (error) {
+  if (error instanceof ValueFuzzError) {
+    writeReproTest({
+      error,
+      outputPath: new URL("./search.repro.test.ts", import.meta.url),
+      runnerImport: "./search.js",
+      runnerSymbol: "executeSearch",
+    });
+  }
+  throw error;
+}
+```
+
+### Time budget
+
+All value- and component-based fuzzers accept `timeoutMs` (wall-clock interrupt, not marked as a failure) and `perRunTimeoutMs` (per-iteration hard timeout) on top of `numRuns`.
+
+```ts
+await fuzzValues({
+  schema,
+  numRuns: 10_000,
+  timeoutMs: 30_000,      // stop after 30 seconds even if runs remain
+  perRunTimeoutMs: 500,   // kill a single iteration that hangs past 500 ms
+  run: executeSearch,
+});
+```
+
 ## Notes
 
 - `sampleProps*` remains available as a component-focused alias. React adapter exports live under `ts-fuzzing/react`, and Vue/Svelte render helpers live under `ts-fuzzing/vue` and `ts-fuzzing/svelte`.
