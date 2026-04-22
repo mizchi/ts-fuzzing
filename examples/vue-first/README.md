@@ -8,6 +8,8 @@ This is a small Vue-first sample project for `ts-fuzzing`. The executable docs l
 - pair a `.vue` component with a companion `.props.ts` file through `typeName`
 - fuzz props from a Zod schema with `fuzzComponent({ schema })`
 - run a lightweight check directly on generated props via `render: async (props) => …`
+- sample boundary-focused props with `sampleBoundaryProps()`
+- persist a corpus while running with `fuzzComponentGuided({ corpusPath })`
 
 Vue SFCs are compiled in SSR mode under vitest's node environment, so this example uses `vue/server-renderer` directly. When you render client-side in a DOM environment, the `createVueDomRender()` helper from `ts-fuzzing/vue` is also available.
 

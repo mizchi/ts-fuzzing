@@ -9,6 +9,8 @@ This is a small Svelte-first sample project for `ts-fuzzing`. The executable doc
 - pair a `.svelte` component with a companion `.props.ts` file through `typeName`
 - provide a shared Svelte context through `createSvelteRender({ context })`
 - fuzz props from a Zod schema with `fuzzComponent({ schema })`
+- sample boundary-focused props with `sampleBoundaryProps()`
+- persist a corpus while running with `fuzzComponentGuided({ corpusPath })`
 
 Svelte-specific helpers are imported from `ts-fuzzing/svelte`.
 
