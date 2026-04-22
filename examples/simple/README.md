@@ -7,6 +7,9 @@ This is a small non-UI sample project for `ts-fuzzing`. The executable docs live
 - run boundary-focused checks with `quickCheckValues()`
 - catch failures as `ValueFuzzError`
 - iterate normalized values directly from Zod with `sampleValuesFromSchema()`
+- iterate normalized values directly from a valibot schema
+- sample boundary-focused values from a schema with `sampleBoundaryValuesFromSchema()`
+- persist a corpus between runs with `fuzzValuesGuided({ corpusPath })`
 
 ## Install
 

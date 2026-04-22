@@ -1,10 +1,16 @@
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import * as v from "valibot";
 import * as z from "zod";
-import { describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test } from "vitest";
 import {
   ValueFuzzError,
   fuzzValues,
+  fuzzValuesGuided,
   quickCheckValues,
   sampleBoundaryValues,
+  sampleBoundaryValuesFromSchema,
   sampleValues,
   sampleValuesFromSchema,
 } from "ts-fuzzing";
@@ -16,6 +22,26 @@ const querySchema = z.object({
   page: z.coerce.number().int().min(1).max(3),
   sort: z.enum(["recent", "relevance"]).optional(),
   term: z.string().min(1).max(8).transform((value) => value.trim().toLowerCase()),
+});
+
+const valibotQuerySchema = v.object({
+  page: v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(3)),
+  sort: v.optional(v.picklist(["recent", "relevance"])),
+  term: v.pipe(v.string(), v.minLength(1), v.maxLength(8)),
+});
+
+const tempDirs: string[] = [];
+
+const makeTempDir = () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ts-fuzzing-simple-example-"));
+  tempDirs.push(dir);
+  return dir;
+};
+
+afterEach(() => {
+  for (const dir of tempDirs.splice(0)) {
+    fs.rmSync(dir, { force: true, recursive: true });
+  }
 });
 
 describe("simple example project", () => {
@@ -127,5 +153,59 @@ describe("simple example project", () => {
       });
       expect(error.warnings).toEqual([]);
     }
+  });
+
+  test("samples normalized values directly from a valibot schema", async () => {
+    const values: Array<v.InferOutput<typeof valibotQuerySchema>> = [];
+    for await (const value of sampleValuesFromSchema({
+      schema: valibotQuerySchema,
+      numRuns: 6,
+      seed: 1,
+    })) {
+      values.push(value);
+    }
+
+    expect(values).toHaveLength(6);
+    for (const value of values) {
+      expect(value.page).toBeGreaterThanOrEqual(1);
+      expect(value.page).toBeLessThanOrEqual(3);
+      expect(value.term.length).toBeGreaterThanOrEqual(1);
+      expect(value.term.length).toBeLessThanOrEqual(8);
+    }
+  });
+
+  test("sampleBoundaryValuesFromSchema surfaces boundary cases from a schema", async () => {
+    const values: Array<v.InferOutput<typeof valibotQuerySchema>> = [];
+    for await (const value of sampleBoundaryValuesFromSchema({
+      schema: valibotQuerySchema,
+      maxCases: 32,
+    })) {
+      values.push(value);
+    }
+
+    expect(values.some((value) => value.page === 1)).toBe(true);
+    expect(values.some((value) => value.page === 3)).toBe(true);
+    expect(values.some((value) => value.term.length === 1)).toBe(true);
+  });
+
+  test("guided mode persists a value corpus while running", async () => {
+    const corpusDir = makeTempDir();
+    const corpusPath = path.join(corpusDir, "search-query-corpus.json");
+
+    const report = await fuzzValuesGuided<SearchQuery>({
+      sourcePath: searchQueryPath,
+      typeName: "SearchQuery",
+      corpusPath,
+      initialCorpusSize: 4,
+      maxIterations: 8,
+      seed: 17,
+      run(value) {
+        normalizeQuery(value);
+      },
+    });
+
+    expect(report.iterations).toBe(8);
+    expect(fs.existsSync(corpusPath)).toBe(true);
+    expect(report.corpusSize).toBeGreaterThan(0);
   });
 });
