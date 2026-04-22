@@ -1,11 +1,17 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
+import fc from "fast-check";
+import type { StandardSchemaV1 } from "@standard-schema/spec";
 import * as v from "valibot";
 import * as z from "zod";
 import { afterEach, describe, expect, test } from "vitest";
 import {
   ValueFuzzError,
+  analyzeTypeDescriptor,
+  arbitraryFromDescriptor,
+  boundaryValuesFromDescriptor,
   fuzzValues,
   fuzzValuesGuided,
   quickCheckValues,
@@ -207,5 +213,63 @@ describe("simple example project", () => {
     expect(report.iterations).toBe(8);
     expect(fs.existsSync(corpusPath)).toBe(true);
     expect(report.corpusSize).toBeGreaterThan(0);
+  });
+
+  test("low-level descriptor API feeds a hand-rolled fast-check property", () => {
+    const descriptor = analyzeTypeDescriptor({
+      sourcePath: fileURLToPath(searchQueryPath),
+      typeName: "SearchQuery",
+    });
+    expect(descriptor.kind).toBe("object");
+
+    const arbitrary = arbitraryFromDescriptor(descriptor);
+    fc.assert(
+      fc.property(arbitrary, (raw) => {
+        const value = raw as SearchQuery;
+        const normalized = normalizeQuery(value);
+        return buildSearchPath(normalized).startsWith("/search?");
+      }),
+      { numRuns: 32, seed: 3 },
+    );
+
+    const boundaries = boundaryValuesFromDescriptor(descriptor) as SearchQuery[];
+    expect(boundaries.some((value) => value.page === 1)).toBe(true);
+    expect(boundaries.some((value) => value.page === 5)).toBe(true);
+  });
+
+  test("standard-schema validator overlays the source type to filter invalid values", async () => {
+    const primaryOnlySchema: StandardSchemaV1<SearchQuery> = {
+      "~standard": {
+        version: 1,
+        vendor: "custom",
+        validate(value) {
+          const candidate = value as Partial<SearchQuery>;
+          if (candidate.sort !== "relevance") {
+            return { issues: [{ message: "sort must be relevance", path: ["sort"] }] };
+          }
+          if ((candidate.page ?? 0) > 3) {
+            return { issues: [{ message: "page must be <= 3", path: ["page"] }] };
+          }
+          return { value: candidate as SearchQuery };
+        },
+      },
+    };
+
+    const values: SearchQuery[] = [];
+    for await (const value of sampleValues<SearchQuery>({
+      sourcePath: searchQueryPath,
+      typeName: "SearchQuery",
+      schema: primaryOnlySchema,
+      numRuns: 8,
+      seed: 19,
+    })) {
+      values.push(value);
+    }
+
+    expect(values).toHaveLength(8);
+    for (const value of values) {
+      expect(value.sort).toBe("relevance");
+      expect(value.page).toBeLessThanOrEqual(3);
+    }
   });
 });
