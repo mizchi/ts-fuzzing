@@ -1,8 +1,13 @@
-import { describe, expect, test } from "vitest";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { afterEach, describe, expect, test } from "vitest";
 import * as z from "zod";
 import {
   fuzzComponent,
+  fuzzComponentGuided,
   quickCheckComponent,
+  sampleBoundaryProps,
   sampleProps,
   sampleValuesFromSchema,
   type ComponentRenderStrategy,
@@ -28,6 +33,20 @@ const createVueSsrRender = <Component, Props = Record<string, unknown>>(): Compo
 const receiptSchema = z.object({
   currency: z.enum(["JPY", "USD"]),
   amount: z.number().int().min(0).max(9999),
+});
+
+const tempDirs: string[] = [];
+
+const makeTempDir = () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ts-fuzzing-vue-example-"));
+  tempDirs.push(dir);
+  return dir;
+};
+
+afterEach(() => {
+  for (const dir of tempDirs.splice(0)) {
+    fs.rmSync(dir, { force: true, recursive: true });
+  }
 });
 
 describe("vue-first example project", () => {
@@ -133,5 +152,40 @@ describe("vue-first example project", () => {
         },
       }),
     ).resolves.toBeUndefined();
+  });
+
+  test("sampleBoundaryProps surfaces the edge cases of a .props.ts file", async () => {
+    const values: Array<Record<string, unknown>> = [];
+    for await (const value of sampleBoundaryProps({
+      sourcePath: priceTagPropsPath,
+      typeName: "PriceTagProps",
+      maxCases: 32,
+    })) {
+      values.push(value);
+    }
+
+    const amounts = values.map((value) => value.amount);
+    expect(amounts).toContain(0);
+    expect(amounts).toContain(9999);
+  });
+
+  test("guided mode persists a corpus while running", async () => {
+    const corpusDir = makeTempDir();
+    const corpusPath = path.join(corpusDir, "price-tag-corpus.json");
+
+    const report = await fuzzComponentGuided({
+      component: PriceTag,
+      sourcePath: priceTagPropsPath,
+      typeName: "PriceTagProps",
+      render: createVueSsrRender(),
+      corpusPath,
+      initialCorpusSize: 4,
+      maxIterations: 8,
+      seed: 13,
+    });
+
+    expect(report.iterations).toBe(8);
+    expect(fs.existsSync(corpusPath)).toBe(true);
+    expect(report.corpusSize).toBeGreaterThan(0);
   });
 });
