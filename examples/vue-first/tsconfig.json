@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "target": "ES2024",
+    "baseUrl": ".",
+    "paths": {
+      "ts-fuzzing": ["../../src/index.ts"],
+      "ts-fuzzing/vue": ["../../src/vue.ts"]
+    },
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "lib": ["ES2024", "DOM"],
+    "types": ["node", "vitest/importMeta"],
+    "skipLibCheck": true
+  },
+  "include": ["src/**/*.ts", "src/**/*.vue"]
+}
