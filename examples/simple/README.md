@@ -10,6 +10,8 @@ This is a small non-UI sample project for `ts-fuzzing`. The executable docs live
 - iterate normalized values directly from a valibot schema
 - sample boundary-focused values from a schema with `sampleBoundaryValuesFromSchema()`
 - persist a corpus between runs with `fuzzValuesGuided({ corpusPath })`
+- reuse a source type from a hand-rolled `fast-check` property via `analyzeTypeDescriptor()` + `arbitraryFromDescriptor()` + `boundaryValuesFromDescriptor()`
+- overlay a Standard Schema validator on a source type to filter generated values
 
 ## Install
 
