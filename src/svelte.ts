@@ -13,10 +13,12 @@ export const createSvelteRender = <Component = unknown, Props = unknown>(
       const context =
         typeof options.context === "function" ? options.context(props) : options.context;
 
-      render(component as any, {
+      const result = render(component as any, {
         context,
         props: props as any,
-      });
+      }) as { body?: unknown; head?: unknown };
+      void result?.body;
+      void result?.head;
     },
   };
 };

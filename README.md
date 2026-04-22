@@ -322,8 +322,10 @@ test("quick-checks a Svelte component through the generic component API", async 
 
 ## Examples and Docs
 
-- Runnable non-UI example: [examples/simple/README.md](/Users/mz/ghq/github.com/mizchi/ts-fuzzing/examples/simple/README.md:1)
-- Runnable React adapter example: [examples/react-first/README.md](/Users/mz/ghq/github.com/mizchi/ts-fuzzing/examples/react-first/README.md:1)
-- Design notes and implementation details: [docs/architecture.md](/Users/mz/ghq/github.com/mizchi/ts-fuzzing/docs/architecture.md:1)
+- Runnable non-UI example: [examples/simple/README.md](./examples/simple/README.md)
+- Runnable React adapter example: [examples/react-first/README.md](./examples/react-first/README.md)
+- Runnable Vue adapter example: [examples/vue-first/README.md](./examples/vue-first/README.md)
+- Runnable Svelte adapter example: [examples/svelte-first/README.md](./examples/svelte-first/README.md)
+- Design notes and implementation details: [docs/architecture.md](./docs/architecture.md)
 
 <!-- release automation bootstrapped -->
