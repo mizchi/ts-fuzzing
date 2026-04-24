@@ -411,6 +411,33 @@ await fuzzStateful<{ items: number[] }, RealStack>({
 
 Failures surface as `StatefulFuzzError` with a `failingTrace` describing the applied actions.
 
+### Seed replay
+
+`replayValues` walks every iteration of a past fuzz run for a given `seed`, records whether each input passed or failed, and returns the full trace without stopping on the first failure. `replayFromError` takes a caught `ValueFuzzError` and rebuilds the run using its recorded seed.
+
+```ts
+import { ValueFuzzError, fuzzValues, replayFromError } from "ts-fuzzing";
+
+try {
+  await fuzzValues({ sourcePath, typeName: "SearchQuery", run: executeSearch });
+} catch (error) {
+  if (error instanceof ValueFuzzError) {
+    const report = await replayFromError({
+      error,
+      sourcePath,
+      typeName: "SearchQuery",
+      run: executeSearch,
+    });
+    for (const step of report.failures) {
+      console.log(step.iteration, step.value, step.cause);
+    }
+  }
+  throw error;
+}
+```
+
+`onIteration` lets you stream each step (e.g. to log every input that was attempted) without collecting the full trace in memory. Pass `stopOnFirstFailure: true` when you only want the first divergence but still need the preceding iterations.
+
 ### Multi-failure collection
 
 `fuzzValues` stops at the first failure so it can minimize the counterexample. When you want to find every distinct failing value in one pass (for example in a bug-sweep session), use `fuzzValuesMulti`. It generates samples with the same descriptor / schema pipeline, runs each input independently, deduplicates failures by serialized value, and returns a report.

@@ -108,3 +108,13 @@ export type {
   ValueFuzzMultiOptions,
   ValueFuzzMultiReport,
 } from "./multi_fuzz.js";
+export {
+  replayFromError,
+  replayValues,
+} from "./replay.js";
+export type {
+  ReplayFromErrorOptions,
+  ReplayIteration,
+  ReplayReport,
+  ReplayValuesOptions,
+} from "./replay.js";
