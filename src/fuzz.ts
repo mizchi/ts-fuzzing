@@ -58,11 +58,17 @@ export type {
   ReactComponentRenderStrategy,
 } from "./react_fuzz.js";
 export {
+  fuzzAssociative,
+  fuzzCommutative,
   fuzzIdempotent,
+  fuzzMonotonic,
   fuzzRoundtrip,
 } from "./invariants.js";
 export type {
+  AssociativeInvariantOptions,
+  CommutativeInvariantOptions,
   IdempotentInvariantOptions,
+  MonotonicInvariantOptions,
   RoundtripInvariantOptions,
 } from "./invariants.js";
 export { fuzzDifferential } from "./differential.js";
