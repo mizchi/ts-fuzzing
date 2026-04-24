@@ -312,7 +312,7 @@ test("quick-checks a Svelte component through the generic component API", async 
 
 ### Invariant helpers
 
-`fuzzRoundtrip` and `fuzzIdempotent` skip the ceremony for the two most common property shapes.
+`fuzzRoundtrip`, `fuzzIdempotent`, `fuzzCommutative`, `fuzzAssociative`, and `fuzzMonotonic` each skip the fast-check ceremony for a common property shape. The commutative/associative/monotonic variants internally draw two or three independent samples from the same descriptor or schema, so you still supply only the single-value source.
 
 ```ts
 import { expect, test } from "vitest";
@@ -339,6 +339,20 @@ test("trim is idempotent", async () => {
       apply(value) { return { text: value.text.trim() }; },
     }),
   ).resolves.toBeUndefined();
+});
+
+test("addition is commutative and associative", async () => {
+  const pair = z.object({ n: z.number().int().min(-8).max(8) });
+  await fuzzCommutative({ schema: pair, operation: (a, b) => a.n + b.n });
+  await fuzzAssociative({ schema: pair, operation: (a, b) => ({ n: a.n + b.n }) });
+});
+
+test("doubling is monotonic", async () => {
+  await fuzzMonotonic({
+    schema: z.object({ n: z.number().int().min(-8).max(8) }),
+    compareInput: (a, b) => a.n - b.n,
+    mapping: ({ n }) => n * 2,
+  });
 });
 ```
 
