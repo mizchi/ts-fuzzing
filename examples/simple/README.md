@@ -13,6 +13,7 @@ This is a small non-UI sample project for `ts-fuzzing`. The executable docs live
 - reuse a source type from a hand-rolled `fast-check` property via `analyzeTypeDescriptor()` + `arbitraryFromDescriptor()` + `boundaryValuesFromDescriptor()`
 - overlay a Standard Schema validator on a source type to filter generated values
 - capture a failing value into a regression corpus with `appendToCorpus()` and replay it with `fuzzFromCorpus()`
+- sweep for every distinct failing value in one pass with `fuzzValuesMulti({ maxFailures })`
 
 ## Install
 

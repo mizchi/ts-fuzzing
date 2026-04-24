@@ -397,6 +397,27 @@ await fuzzStateful<{ items: number[] }, RealStack>({
 
 Failures surface as `StatefulFuzzError` with a `failingTrace` describing the applied actions.
 
+### Multi-failure collection
+
+`fuzzValues` stops at the first failure so it can minimize the counterexample. When you want to find every distinct failing value in one pass (for example in a bug-sweep session), use `fuzzValuesMulti`. It generates samples with the same descriptor / schema pipeline, runs each input independently, deduplicates failures by serialized value, and returns a report.
+
+```ts
+import { fuzzValuesMulti } from "ts-fuzzing";
+
+const report = await fuzzValuesMulti({
+  schema,
+  maxFailures: 5,
+  numRuns: 500,
+  run: executeSearch,
+});
+
+for (const failure of report.failures) {
+  console.error(failure.iteration, failure.value, failure.cause);
+}
+```
+
+`report.failures` lists up to `maxFailures` distinct failing inputs. Shrinking is intentionally skipped — run a single value through `fuzzValues` (or `writeReproTest`) when you want a minimized counterexample.
+
 ### Regression corpus
 
 `appendToCorpus()` stores a failing value from `ValueFuzzError.failingValue`, and `fuzzFromCorpus()` re-runs every stored entry on the next test. Map and Set values are preserved across save/load.
