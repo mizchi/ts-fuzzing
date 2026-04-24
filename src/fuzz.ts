@@ -84,3 +84,15 @@ export type {
   StatefulFuzzOptions,
   StatefulTraceEntry,
 } from "./stateful.js";
+export {
+  appendToCorpus,
+  fuzzFromCorpus,
+  loadCorpus,
+  saveCorpus,
+} from "./corpus.js";
+export type {
+  CorpusFailure,
+  CorpusLocation,
+  CorpusReport,
+  FuzzFromCorpusOptions,
+} from "./corpus.js";

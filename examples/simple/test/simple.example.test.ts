@@ -10,10 +10,13 @@ import { afterEach, describe, expect, test } from "vitest";
 import {
   ValueFuzzError,
   analyzeTypeDescriptor,
+  appendToCorpus,
   arbitraryFromDescriptor,
   boundaryValuesFromDescriptor,
+  fuzzFromCorpus,
   fuzzValues,
   fuzzValuesGuided,
+  loadCorpus,
   quickCheckValues,
   sampleBoundaryValues,
   sampleBoundaryValuesFromSchema,
@@ -271,5 +274,50 @@ describe("simple example project", () => {
       expect(value.sort).toBe("relevance");
       expect(value.page).toBeLessThanOrEqual(3);
     }
+  });
+
+  test("captured failing values seed a regression corpus for the next run", async () => {
+    const corpusDir = makeTempDir();
+    const corpusPath = path.join(corpusDir, "search-regression.json");
+
+    const isBlocked = (query: SearchQuery) => query.page === 5 && query.sort === "recent";
+    const runSearchCheck = (query: SearchQuery) => {
+      if (isBlocked(query)) {
+        throw new Error("recent page 5 is blocked");
+      }
+    };
+
+    let caught: unknown;
+    try {
+      await fuzzValues<SearchQuery>({
+        sourcePath: searchQueryPath,
+        typeName: "SearchQuery",
+        numRuns: 64,
+        seed: 3,
+        run: runSearchCheck,
+      });
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toBeInstanceOf(ValueFuzzError);
+    if (caught instanceof ValueFuzzError) {
+      appendToCorpus({ corpusPath, value: caught.failingValue });
+    }
+
+    expect(loadCorpus<SearchQuery>({ corpusPath })).toHaveLength(1);
+
+    const report = await fuzzFromCorpus<SearchQuery>({
+      corpusPath,
+      collectAllFailures: true,
+      run(query) {
+        const allowed = { ...query, sort: "relevance" as const };
+        runSearchCheck(allowed);
+      },
+    });
+
+    expect(report.total).toBe(1);
+    expect(report.passed).toBe(1);
+    expect(report.failures).toEqual([]);
   });
 });

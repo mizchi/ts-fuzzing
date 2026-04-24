@@ -397,6 +397,38 @@ await fuzzStateful<{ items: number[] }, RealStack>({
 
 Failures surface as `StatefulFuzzError` with a `failingTrace` describing the applied actions.
 
+### Regression corpus
+
+`appendToCorpus()` stores a failing value from `ValueFuzzError.failingValue`, and `fuzzFromCorpus()` re-runs every stored entry on the next test. Map and Set values are preserved across save/load.
+
+```ts
+import {
+  ValueFuzzError,
+  appendToCorpus,
+  fuzzFromCorpus,
+  fuzzValues,
+} from "ts-fuzzing";
+
+const corpusPath = new URL("./search-regression.json", import.meta.url);
+
+try {
+  await fuzzValues({ schema, run: executeSearch });
+} catch (error) {
+  if (error instanceof ValueFuzzError) {
+    appendToCorpus({ corpusPath, value: error.failingValue });
+  }
+  throw error;
+}
+
+// later, in the regression suite:
+const report = await fuzzFromCorpus({
+  corpusPath,
+  collectAllFailures: true,
+  run: executeSearch,
+});
+expect(report.failures).toEqual([]);
+```
+
 ### Minimal repro export
 
 When a run fails, `renderReproTest` / `writeReproTest` turn the caught `ValueFuzzError` into a standalone test file so you can commit the failing input as a regression.
