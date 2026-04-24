@@ -118,3 +118,15 @@ export type {
   ReplayReport,
   ReplayValuesOptions,
 } from "./replay.js";
+export {
+  fuzzFromCorpusWithMutation,
+  generateMutations,
+  mutateValue,
+} from "./mutation.js";
+export type {
+  CorpusMutationFailure,
+  CorpusMutationReport,
+  FuzzFromCorpusWithMutationOptions,
+  GenerateMutationsOptions,
+  MutateValueOptions,
+} from "./mutation.js";

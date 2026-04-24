@@ -459,6 +459,35 @@ for (const failure of report.failures) {
 
 `report.failures` lists up to `maxFailures` distinct failing inputs. Shrinking is intentionally skipped — run a single value through `fuzzValues` (or `writeReproTest`) when you want a minimized counterexample.
 
+### Mutation
+
+`mutateValue` and `generateMutations` apply constraint-aware tweaks (increment numbers by ±1/±2, edit a string character, push/pop an array entry, swap a nested object property) while keeping the value within the source or schema descriptor. Literals and enum branches are deliberately preserved so the value still matches its declared type. `fuzzFromCorpusWithMutation` expands every saved corpus entry into `mutationsPerEntry` neighbours and runs each through a check:
+
+```ts
+import {
+  fuzzFromCorpusWithMutation,
+  generateMutations,
+  mutateValue,
+} from "ts-fuzzing";
+
+const nearby = generateMutations({
+  schema,
+  count: 10,
+  seed: 1,
+  value: savedFailure,
+});
+
+const report = await fuzzFromCorpusWithMutation({
+  corpusPath,
+  schema,
+  mutationsPerEntry: 16,
+  collectAllFailures: true,
+  run: executeSearch,
+});
+```
+
+The report has the same shape as `fuzzFromCorpus` plus `attempts` (total mutations tried) and, on each failure, both the `origin` corpus entry and the `mutation` that actually broke the check.
+
 ### Regression corpus
 
 `appendToCorpus()` stores a failing value from `ValueFuzzError.failingValue`, and `fuzzFromCorpus()` re-runs every stored entry on the next test. Map and Set values are preserved across save/load.

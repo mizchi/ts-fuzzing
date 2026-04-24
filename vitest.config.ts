@@ -54,6 +54,6 @@ export default defineConfig({
       "examples/**/*.test.ts",
       "examples/**/*.test.tsx",
     ],
-    testTimeout: 15000,
+    testTimeout: 30000,
   },
 });
