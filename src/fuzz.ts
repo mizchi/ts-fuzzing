@@ -96,3 +96,9 @@ export type {
   CorpusReport,
   FuzzFromCorpusOptions,
 } from "./corpus.js";
+export { fuzzValuesMulti } from "./multi_fuzz.js";
+export type {
+  MultiFailure,
+  ValueFuzzMultiOptions,
+  ValueFuzzMultiReport,
+} from "./multi_fuzz.js";

@@ -16,6 +16,7 @@ import {
   fuzzFromCorpus,
   fuzzValues,
   fuzzValuesGuided,
+  fuzzValuesMulti,
   loadCorpus,
   quickCheckValues,
   sampleBoundaryValues,
@@ -319,5 +320,30 @@ describe("simple example project", () => {
     expect(report.total).toBe(1);
     expect(report.passed).toBe(1);
     expect(report.failures).toEqual([]);
+  });
+
+  test("fuzzValuesMulti collects every distinct failing query in a single sweep", async () => {
+    const report = await fuzzValuesMulti<SearchQuery>({
+      sourcePath: searchQueryPath,
+      typeName: "SearchQuery",
+      maxFailures: 3,
+      numRuns: 256,
+      seed: 7,
+      run(query) {
+        if (query.page === 5) {
+          throw new Error(`page 5 rejected (sort=${query.sort ?? "none"})`);
+        }
+      },
+    });
+
+    expect(report.failures.length).toBeGreaterThan(0);
+    expect(report.failures.length).toBeLessThanOrEqual(3);
+    const serialized = new Set(
+      report.failures.map((failure) => JSON.stringify(failure.value)),
+    );
+    expect(serialized.size).toBe(report.failures.length);
+    for (const failure of report.failures) {
+      expect(failure.value.page).toBe(5);
+    }
   });
 });
