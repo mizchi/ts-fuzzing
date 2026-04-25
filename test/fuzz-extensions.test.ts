@@ -152,7 +152,8 @@ describe("repro test export", () => {
     expect(source).toContain('import { runSearch } from "../src/runner.js";');
     expect(source).toContain("seed: 42");
     expect(source).toContain('"page": 5');
-    expect(source).toContain("runSearch(failingValue);");
+    expect(source).toContain("async () =>");
+    expect(source).toContain("await runSearch(failingValue);");
   });
 
   test("renderReproTest supports the node:test runner", () => {
@@ -171,7 +172,8 @@ describe("repro test export", () => {
     });
     expect(written).toBe(outputPath);
     const body = fs.readFileSync(outputPath, "utf8");
-    expect(body).toContain("runSearch(failingValue);");
+    expect(body).toContain("await runSearch(failingValue);");
+    expect(body).toContain("async () =>");
   });
 });
 

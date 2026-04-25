@@ -56,12 +56,20 @@ const resolveRun = <Input>(run: ValueRunner<Input> | undefined) => {
   return (value: unknown) => run.run(value as Input);
 };
 
+const resolveDescribeInput = <Input>(run: ValueRunner<Input> | undefined) => {
+  if (!run || typeof run === "function") {
+    return undefined;
+  }
+  return run.describeInput;
+};
+
 export const replayValues = async <Input = unknown>(
   options: ReplayValuesOptions<Input>,
 ): Promise<ReplayReport<Input>> => {
   const resolved = resolveFuzzData(options);
   emitFuzzWarnings(resolved.warnings);
-  const descriptor = resolveInputDescriptor(resolved.valueDescriptor, undefined);
+  const describeInput = resolveDescribeInput(options.run);
+  const descriptor = resolveInputDescriptor(resolved.valueDescriptor, describeInput);
   const base = arbitraryFromDescriptor(descriptor);
   const arbitrary = (
     resolved.schemaSupport

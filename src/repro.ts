@@ -52,10 +52,10 @@ export const renderReproTest = (options: ReproRenderOptions): string => {
   }
 
   const runnerCall = runnerImport
-    ? `  ${runnerSymbol}(failingValue);`
+    ? `  await ${runnerSymbol}(failingValue);`
     : `  // TODO: call your code under test with failingValue\n  void failingValue;`;
 
-  return `${imports.join("\n")}\n\ntest(${JSON.stringify(displayName)}, () => {\n${seedComment}  const failingValue = ${valueLiteral};\n${runnerCall}\n});\n`;
+  return `${imports.join("\n")}\n\ntest(${JSON.stringify(displayName)}, async () => {\n${seedComment}  const failingValue = ${valueLiteral};\n${runnerCall}\n});\n`;
 };
 
 export const writeReproTest = (options: ReproWriteOptions): string => {
