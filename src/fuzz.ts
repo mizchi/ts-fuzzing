@@ -130,3 +130,13 @@ export type {
   GenerateMutationsOptions,
   MutateValueOptions,
 } from "./mutation.js";
+export {
+  collectStatistics,
+  formatStatistics,
+} from "./statistics.js";
+export type {
+  ClassifyFn,
+  StatisticsBucket,
+  StatisticsOptions,
+  StatisticsReport,
+} from "./statistics.js";
