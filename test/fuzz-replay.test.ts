@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import * as z from "zod";
 import {
   ValueFuzzError,
@@ -95,6 +95,25 @@ describe("replayValues", () => {
       },
     });
     expect(seen).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+  });
+
+  test("honors describeInput when the runner is provided as a ValueRunner object", async () => {
+    const describeInput = vi.fn((descriptor) => descriptor);
+    const ran = vi.fn();
+
+    const report = await replayValues({
+      schema,
+      numRuns: 4,
+      seed: 11,
+      run: {
+        describeInput,
+        run: ran,
+      },
+    });
+
+    expect(describeInput).toHaveBeenCalledTimes(1);
+    expect(ran).toHaveBeenCalledTimes(4);
+    expect(report.iterations).toHaveLength(4);
   });
 });
 
