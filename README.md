@@ -2,6 +2,23 @@
 
 Generate values from TypeScript types or schemas, then run quick-checks or fuzzing against arbitrary callbacks and UI components.
 
+## API quick reference
+
+| Workflow | Helpers |
+| --- | --- |
+| Generate values | `sampleValues`, `sampleBoundaryValues`, `sampleProps`, `sampleBoundaryProps`, `sampleValuesFromSchema`, `sampleBoundaryValuesFromSchema` |
+| Property-based fuzzing | `fuzzValues`, `quickCheckValues`, `fuzzValuesGuided`, `fuzzValuesMulti`, `replayValues`, `replayFromError` |
+| Component fuzzing | `fuzzComponent`, `quickCheckComponent`, `fuzzComponentGuided`, `fuzzReactComponent` (`ts-fuzzing/react`), `createVueDomRender` (`ts-fuzzing/vue`), `createSvelteRender` (`ts-fuzzing/svelte`) |
+| Invariant helpers | `fuzzRoundtrip`, `fuzzIdempotent`, `fuzzCommutative`, `fuzzAssociative`, `fuzzMonotonic` |
+| Stateful / sequence | `fuzzStateful`, `StatefulFuzzError` |
+| Differential | `fuzzDifferential` |
+| Corpus / regression | `loadCorpus`, `saveCorpus`, `appendToCorpus`, `fuzzFromCorpus`, `fuzzFromCorpusWithMutation` |
+| Mutation | `mutateValue`, `generateMutations` |
+| Statistics | `collectStatistics`, `formatStatistics` |
+| Failure tooling | `ValueFuzzError`, `ComponentFuzzError`, `renderReproTest`, `writeReproTest` |
+| Low-level | `analyzeTypeDescriptor`, `analyzePropsDescriptor`, `arbitraryFromDescriptor`, `boundaryValuesFromDescriptor`, `schemaSupportFromSchema` |
+| Marker types | `UUID`, `ULID`, `ISODateString`, `Int`, `Float`, `Min`, `Max`, `MinLength`, `MaxLength`, `MinItems`, `MaxItems`, `Pattern<...>` |
+
 ## Install
 
 Requirements:
@@ -458,6 +475,31 @@ for (const failure of report.failures) {
 ```
 
 `report.failures` lists up to `maxFailures` distinct failing inputs. Shrinking is intentionally skipped — run a single value through `fuzzValues` (or `writeReproTest`) when you want a minimized counterexample.
+
+### Statistics / coverage reporter
+
+`collectStatistics` samples inputs through the same descriptor / schema pipeline and bucketizes each one through a user-supplied `classify`. It returns a sorted `StatisticsReport` you can assert on, and `formatStatistics` renders it as a human-readable histogram.
+
+```ts
+import { collectStatistics, formatStatistics } from "ts-fuzzing";
+
+const report = await collectStatistics({
+  schema: querySchema,
+  numRuns: 500,
+  classify(value) {
+    if (value.page === 1) return "first-page";
+    if (value.page === 5) return "last-page";
+    return "middle";
+  },
+});
+
+console.log(formatStatistics(report));
+// 60.5%  [302/500]  middle
+// 19.8%  [ 99/500]  first-page
+// 19.8%  [ 99/500]  last-page
+```
+
+Return an array from `classify` to attach multiple labels per input (e.g. `["even", "boundary"]`) and `undefined` to skip the input from the histogram.
 
 ### Mutation
 
