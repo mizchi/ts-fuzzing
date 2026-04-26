@@ -21,6 +21,7 @@ import {
   type SchemaOptions,
   type SourceOptions,
 } from "./fuzz_data.js";
+import { createProgressTracker, type ProgressOptions } from "./progress.js";
 import type { StandardSchemaLike } from "./schema.js";
 
 export type ValueRunner<Input = unknown> =
@@ -30,7 +31,7 @@ export type ValueRunner<Input = unknown> =
       run: (input: Input) => unknown | Promise<unknown>;
     };
 
-export type ValueFuzzOptions<Input = unknown, Schema extends StandardSchemaLike = StandardSchemaLike> = SourceOptions & SchemaOptions<Schema> & {
+export type ValueFuzzOptions<Input = unknown, Schema extends StandardSchemaLike = StandardSchemaLike> = SourceOptions & SchemaOptions<Schema> & ProgressOptions & {
   numRuns?: number;
   perRunTimeoutMs?: number;
   run: ValueRunner<Input>;
@@ -61,7 +62,7 @@ export type QuickCheckReport = {
   warnings: string[];
 };
 
-export type ValueGuidedFuzzOptions<Input = unknown, Schema extends StandardSchemaLike = StandardSchemaLike> = SourceOptions & SchemaOptions<Schema> & {
+export type ValueGuidedFuzzOptions<Input = unknown, Schema extends StandardSchemaLike = StandardSchemaLike> = SourceOptions & SchemaOptions<Schema> & ProgressOptions & {
   corpusPath?: string | URL;
   initialCorpusSize?: number;
   maxIterations?: number;
@@ -69,7 +70,7 @@ export type ValueGuidedFuzzOptions<Input = unknown, Schema extends StandardSchem
   seed?: number;
 };
 
-export type ValueQuickCheckOptions<Input = unknown, Schema extends StandardSchemaLike = StandardSchemaLike> = SourceOptions & SchemaOptions<Schema> & {
+export type ValueQuickCheckOptions<Input = unknown, Schema extends StandardSchemaLike = StandardSchemaLike> = SourceOptions & SchemaOptions<Schema> & ProgressOptions & {
   maxCases?: number;
   run: ValueRunner<Input>;
 };
@@ -187,27 +188,41 @@ export const fuzzValues = async <Input = unknown>(
       : arbitraryFromDescriptor(inputDescriptor)
   ) as fc.Arbitrary<unknown>;
   let lastValue: unknown;
+  const totalRuns = options.numRuns ?? 100;
+  const progress = createProgressTracker(options);
+  let iteration = 0;
+  let failures = 0;
 
   try {
     await fc.assert(
       fc.asyncProperty(arbitrary, async (candidate) => {
+        iteration += 1;
         const normalized = normalizeFuzzValue(candidate, resolved.schemaSupport);
         if (!normalized.ok) {
+          await progress.tick(iteration, failures, totalRuns);
           return;
         }
         lastValue = normalized.value;
-        await run(normalized.value);
+        try {
+          await run(normalized.value);
+        } catch (cause) {
+          failures += 1;
+          throw cause;
+        }
+        await progress.tick(iteration, failures, totalRuns);
       }),
       {
         endOnFailure: true,
         interruptAfterTimeLimit: options.timeoutMs,
         markInterruptAsFailure: false,
-        numRuns: options.numRuns ?? 100,
+        numRuns: totalRuns,
         seed: options.seed,
         timeout: options.perRunTimeoutMs,
       },
     );
+    await progress.finalize(iteration, failures, totalRuns);
   } catch (error) {
+    await progress.finalize(iteration, failures, totalRuns);
     throw new ValueFuzzError("value fuzzing failed", {
       cause: error,
       failingValue: lastValue,
@@ -358,11 +373,13 @@ export const quickCheckValues = async <Input = unknown>(
   }
 
   let checkedCases = 0;
+  const progress = createProgressTracker(options);
   for (const candidate of cases) {
     checkedCases += 1;
     try {
       await run(candidate);
     } catch (error) {
+      await progress.finalize(checkedCases, 1, cases.length);
       throw new ValueFuzzError("value quick-check failed", {
         cause: error,
         failingValue: candidate,
@@ -374,7 +391,10 @@ export const quickCheckValues = async <Input = unknown>(
         warnings: resolved.warnings,
       });
     }
+    await progress.tick(checkedCases, 0, cases.length);
   }
+
+  await progress.finalize(checkedCases, 0, cases.length);
 
   return {
     checkedCases,

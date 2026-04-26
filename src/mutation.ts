@@ -12,6 +12,7 @@ import {
   type SourceOptions,
 } from "./fuzz_data.js";
 import { ValueFuzzError, type ValueRunner } from "./input_fuzz.js";
+import { createProgressTracker, type ProgressOptions } from "./progress.js";
 import type { CorpusLocation } from "./corpus.js";
 import type { StandardSchemaLike } from "./schema.js";
 
@@ -51,7 +52,8 @@ export type FuzzFromCorpusWithMutationOptions<
   Schema extends StandardSchemaLike = StandardSchemaLike,
 > = CorpusLocation &
   SourceOptions &
-  SchemaOptions<Schema> & {
+  SchemaOptions<Schema> &
+  ProgressOptions & {
     collectAllFailures?: boolean;
     mutationsPerEntry?: number;
     run: ValueRunner<Input>;
@@ -109,6 +111,8 @@ export const fuzzFromCorpusWithMutation = async <Input = unknown>(
   const mutationsPerEntry = options.mutationsPerEntry ?? 8;
 
   const failures: CorpusMutationFailure<Input>[] = [];
+  const totalAttempts = corpus.length * mutationsPerEntry;
+  const progress = createProgressTracker(options);
   let passed = 0;
   let attempts = 0;
 
@@ -128,6 +132,7 @@ export const fuzzFromCorpusWithMutation = async <Input = unknown>(
           originIndex,
         });
         if (!options.collectAllFailures) {
+          await progress.finalize(attempts, failures.length, totalAttempts);
           throw new ValueFuzzError(
             `corpus mutation failed on entry ${originIndex}`,
             {
@@ -137,8 +142,11 @@ export const fuzzFromCorpusWithMutation = async <Input = unknown>(
           );
         }
       }
+      await progress.tick(attempts, failures.length, totalAttempts);
     }
   }
+
+  await progress.finalize(attempts, failures.length, totalAttempts);
 
   return {
     attempts,
