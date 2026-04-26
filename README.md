@@ -2,6 +2,23 @@
 
 Generate values from TypeScript types or schemas, then run quick-checks or fuzzing against arbitrary callbacks and UI components.
 
+## API quick reference
+
+| Workflow | Helpers |
+| --- | --- |
+| Generate values | `sampleValues`, `sampleBoundaryValues`, `sampleProps`, `sampleBoundaryProps`, `sampleValuesFromSchema`, `sampleBoundaryValuesFromSchema` |
+| Property-based fuzzing | `fuzzValues`, `quickCheckValues`, `fuzzValuesGuided`, `fuzzValuesMulti`, `replayValues`, `replayFromError` |
+| Component fuzzing | `fuzzComponent`, `quickCheckComponent`, `fuzzComponentGuided`, `fuzzReactComponent` (`ts-fuzzing/react`), `createVueDomRender` (`ts-fuzzing/vue`), `createSvelteRender` (`ts-fuzzing/svelte`) |
+| Invariant helpers | `fuzzRoundtrip`, `fuzzIdempotent`, `fuzzCommutative`, `fuzzAssociative`, `fuzzMonotonic` |
+| Stateful / sequence | `fuzzStateful`, `StatefulFuzzError` |
+| Differential | `fuzzDifferential` |
+| Corpus / regression | `loadCorpus`, `saveCorpus`, `appendToCorpus`, `fuzzFromCorpus`, `fuzzFromCorpusWithMutation` |
+| Mutation | `mutateValue`, `generateMutations` |
+| Statistics | `collectStatistics`, `formatStatistics` |
+| Failure tooling | `ValueFuzzError`, `ComponentFuzzError`, `renderReproTest`, `writeReproTest` |
+| Low-level | `analyzeTypeDescriptor`, `analyzePropsDescriptor`, `arbitraryFromDescriptor`, `boundaryValuesFromDescriptor`, `schemaSupportFromSchema` |
+| Marker types | `UUID`, `ULID`, `ISODateString`, `Int`, `Float`, `Min`, `Max`, `MinLength`, `MaxLength`, `MinItems`, `MaxItems`, `Pattern<...>` |
+
 ## Install
 
 Requirements:
@@ -310,6 +327,295 @@ test("quick-checks a Svelte component through the generic component API", async 
 });
 ```
 
+### Invariant helpers
+
+`fuzzRoundtrip`, `fuzzIdempotent`, `fuzzCommutative`, `fuzzAssociative`, and `fuzzMonotonic` each skip the fast-check ceremony for a common property shape. The commutative/associative/monotonic variants internally draw two or three independent samples from the same descriptor or schema, so you still supply only the single-value source.
+
+```ts
+import { expect, test } from "vitest";
+import * as z from "zod";
+import { fuzzIdempotent, fuzzRoundtrip } from "ts-fuzzing";
+
+const record = z.object({ name: z.string().min(1).max(16) });
+
+test("JSON encode/decode roundtrips", async () => {
+  await expect(
+    fuzzRoundtrip({
+      schema: record,
+      numRuns: 100,
+      encode(value) { return JSON.stringify(value); },
+      decode(text) { return JSON.parse(text); },
+    }),
+  ).resolves.toBeUndefined();
+});
+
+test("trim is idempotent", async () => {
+  await expect(
+    fuzzIdempotent({
+      schema: z.object({ text: z.string().max(8) }),
+      apply(value) { return { text: value.text.trim() }; },
+    }),
+  ).resolves.toBeUndefined();
+});
+
+test("addition is commutative and associative", async () => {
+  const pair = z.object({ n: z.number().int().min(-8).max(8) });
+  await fuzzCommutative({ schema: pair, operation: (a, b) => a.n + b.n });
+  await fuzzAssociative({ schema: pair, operation: (a, b) => ({ n: a.n + b.n }) });
+});
+
+test("doubling is monotonic", async () => {
+  await fuzzMonotonic({
+    schema: z.object({ n: z.number().int().min(-8).max(8) }),
+    compareInput: (a, b) => a.n - b.n,
+    mapping: ({ n }) => n * 2,
+  });
+});
+```
+
+### Differential testing
+
+`fuzzDifferential` runs two implementations against the same generated input and reports the first divergence.
+
+```ts
+import { fuzzDifferential } from "ts-fuzzing";
+
+await fuzzDifferential({
+  schema: inputSchema,
+  implementations: [legacyImpl, rewriteImpl],
+  names: ["legacy", "rewrite"],
+  numRuns: 200,
+});
+```
+
+### Stateful / command sequence fuzzing
+
+`fuzzStateful` generates a random sequence of actions, runs each against a reference model and the real implementation, and checks an invariant after every step.
+
+```ts
+import fc from "fast-check";
+import { fuzzStateful } from "ts-fuzzing";
+
+await fuzzStateful<{ items: number[] }, RealStack>({
+  setup: () => ({ model: { items: [] }, real: new RealStack() }),
+  actions: [
+    {
+      name: "push",
+      generate: fc.integer(),
+      apply({ model, real, input }) {
+        model.items.push(input);
+        real.push(input);
+      },
+    },
+    {
+      name: "pop",
+      precondition: (model) => model.items.length > 0,
+      apply({ model, real }) {
+        model.items.pop();
+        real.pop();
+      },
+    },
+  ],
+  invariant({ model, real }) {
+    if (model.items.length !== real.size()) {
+      throw new Error("length diverged");
+    }
+  },
+  maxActions: 40,
+  numRuns: 100,
+});
+```
+
+Failures surface as `StatefulFuzzError` with a `failingTrace` describing the applied actions.
+
+### Seed replay
+
+`replayValues` walks every iteration of a past fuzz run for a given `seed`, records whether each input passed or failed, and returns the full trace without stopping on the first failure. `replayFromError` takes a caught `ValueFuzzError` and rebuilds the run using its recorded seed.
+
+```ts
+import { ValueFuzzError, fuzzValues, replayFromError } from "ts-fuzzing";
+
+try {
+  await fuzzValues({ sourcePath, typeName: "SearchQuery", run: executeSearch });
+} catch (error) {
+  if (error instanceof ValueFuzzError) {
+    const report = await replayFromError({
+      error,
+      sourcePath,
+      typeName: "SearchQuery",
+      run: executeSearch,
+    });
+    for (const step of report.failures) {
+      console.log(step.iteration, step.value, step.cause);
+    }
+  }
+  throw error;
+}
+```
+
+`onIteration` lets you stream each step (e.g. to log every input that was attempted) without collecting the full trace in memory. Pass `stopOnFirstFailure: true` when you only want the first divergence but still need the preceding iterations.
+
+### Multi-failure collection
+
+`fuzzValues` stops at the first failure so it can minimize the counterexample. When you want to find every distinct failing value in one pass (for example in a bug-sweep session), use `fuzzValuesMulti`. It generates samples with the same descriptor / schema pipeline, runs each input independently, deduplicates failures by serialized value, and returns a report.
+
+```ts
+import { fuzzValuesMulti } from "ts-fuzzing";
+
+const report = await fuzzValuesMulti({
+  schema,
+  maxFailures: 5,
+  numRuns: 500,
+  run: executeSearch,
+});
+
+for (const failure of report.failures) {
+  console.error(failure.iteration, failure.value, failure.cause);
+}
+```
+
+`report.failures` lists up to `maxFailures` distinct failing inputs. Shrinking is intentionally skipped — run a single value through `fuzzValues` (or `writeReproTest`) when you want a minimized counterexample.
+
+### Statistics / coverage reporter
+
+`collectStatistics` samples inputs through the same descriptor / schema pipeline and bucketizes each one through a user-supplied `classify`. It returns a sorted `StatisticsReport` you can assert on, and `formatStatistics` renders it as a human-readable histogram.
+
+```ts
+import { collectStatistics, formatStatistics } from "ts-fuzzing";
+
+const report = await collectStatistics({
+  schema: querySchema,
+  numRuns: 500,
+  classify(value) {
+    if (value.page === 1) return "first-page";
+    if (value.page === 5) return "last-page";
+    return "middle";
+  },
+});
+
+console.log(formatStatistics(report));
+// 60.5%  [302/500]  middle
+// 19.8%  [ 99/500]  first-page
+// 19.8%  [ 99/500]  last-page
+```
+
+Return an array from `classify` to attach multiple labels per input (e.g. `["even", "boundary"]`) and `undefined` to skip the input from the histogram.
+
+### Mutation
+
+`mutateValue` and `generateMutations` apply constraint-aware tweaks (increment numbers by ±1/±2, edit a string character, push/pop an array entry, swap a nested object property) while keeping the value within the source or schema descriptor. Literals and enum branches are deliberately preserved so the value still matches its declared type. `fuzzFromCorpusWithMutation` expands every saved corpus entry into `mutationsPerEntry` neighbours and runs each through a check:
+
+```ts
+import {
+  fuzzFromCorpusWithMutation,
+  generateMutations,
+  mutateValue,
+} from "ts-fuzzing";
+
+const nearby = generateMutations({
+  schema,
+  count: 10,
+  seed: 1,
+  value: savedFailure,
+});
+
+const report = await fuzzFromCorpusWithMutation({
+  corpusPath,
+  schema,
+  mutationsPerEntry: 16,
+  collectAllFailures: true,
+  run: executeSearch,
+});
+```
+
+The report has the same shape as `fuzzFromCorpus` plus `attempts` (total mutations tried) and, on each failure, both the `origin` corpus entry and the `mutation` that actually broke the check.
+
+### Regression corpus
+
+`appendToCorpus()` stores a failing value from `ValueFuzzError.failingValue`, and `fuzzFromCorpus()` re-runs every stored entry on the next test. Map and Set values are preserved across save/load.
+
+```ts
+import {
+  ValueFuzzError,
+  appendToCorpus,
+  fuzzFromCorpus,
+  fuzzValues,
+} from "ts-fuzzing";
+
+const corpusPath = new URL("./search-regression.json", import.meta.url);
+
+try {
+  await fuzzValues({ schema, run: executeSearch });
+} catch (error) {
+  if (error instanceof ValueFuzzError) {
+    appendToCorpus({ corpusPath, value: error.failingValue });
+  }
+  throw error;
+}
+
+// later, in the regression suite:
+const report = await fuzzFromCorpus({
+  corpusPath,
+  collectAllFailures: true,
+  run: executeSearch,
+});
+expect(report.failures).toEqual([]);
+```
+
+### Minimal repro export
+
+When a run fails, `renderReproTest` / `writeReproTest` turn the caught `ValueFuzzError` into a standalone test file so you can commit the failing input as a regression.
+
+```ts
+import { ValueFuzzError, fuzzValues, writeReproTest } from "ts-fuzzing";
+
+try {
+  await fuzzValues({ schema, run: executeSearch });
+} catch (error) {
+  if (error instanceof ValueFuzzError) {
+    writeReproTest({
+      error,
+      outputPath: new URL("./search.repro.test.ts", import.meta.url),
+      runnerImport: "./search.js",
+      runnerSymbol: "executeSearch",
+    });
+  }
+  throw error;
+}
+```
+
+### Progress hooks
+
+Every long-running runner (`fuzzValues`, `quickCheckValues`, `fuzzValuesMulti`, `fuzzFromCorpus`, `fuzzFromCorpusWithMutation`, plus their component-level wrappers) accepts an `onProgress` callback throttled by `progressIntervalMs` (default `1000`). The hook receives `{ iteration, elapsedMs, failures, totalRuns? }` so you can stream a status line during a long fuzz run without polluting fast paths with per-iteration logging.
+
+```ts
+await fuzzValues({
+  schema,
+  numRuns: 10_000,
+  progressIntervalMs: 2_000,
+  onProgress({ iteration, totalRuns, failures, elapsedMs }) {
+    console.log(`[${elapsedMs}ms] ${iteration}/${totalRuns} (${failures} failures)`);
+  },
+  run: executeSearch,
+});
+```
+
+The hook always fires once on completion (or before throwing) so the final iteration / failure count is reported even when the configured interval would otherwise suppress it. Use `progressIntervalMs: 0` to receive an event after every iteration.
+
+### Time budget
+
+All value- and component-based fuzzers accept `timeoutMs` (wall-clock interrupt, not marked as a failure) and `perRunTimeoutMs` (per-iteration hard timeout) on top of `numRuns`.
+
+```ts
+await fuzzValues({
+  schema,
+  numRuns: 10_000,
+  timeoutMs: 30_000,      // stop after 30 seconds even if runs remain
+  perRunTimeoutMs: 500,   // kill a single iteration that hangs past 500 ms
+  run: executeSearch,
+});
+```
+
 ## Notes
 
 - `sampleProps*` remains available as a component-focused alias. React adapter exports live under `ts-fuzzing/react`, and Vue/Svelte render helpers live under `ts-fuzzing/vue` and `ts-fuzzing/svelte`.
@@ -322,8 +628,10 @@ test("quick-checks a Svelte component through the generic component API", async 
 
 ## Examples and Docs
 
-- Runnable non-UI example: [examples/simple/README.md](/Users/mz/ghq/github.com/mizchi/ts-fuzzing/examples/simple/README.md:1)
-- Runnable React adapter example: [examples/react-first/README.md](/Users/mz/ghq/github.com/mizchi/ts-fuzzing/examples/react-first/README.md:1)
-- Design notes and implementation details: [docs/architecture.md](/Users/mz/ghq/github.com/mizchi/ts-fuzzing/docs/architecture.md:1)
+- Runnable non-UI example: [examples/simple/README.md](./examples/simple/README.md)
+- Runnable React adapter example: [examples/react-first/README.md](./examples/react-first/README.md)
+- Runnable Vue adapter example: [examples/vue-first/README.md](./examples/vue-first/README.md)
+- Runnable Svelte adapter example: [examples/svelte-first/README.md](./examples/svelte-first/README.md)
+- Design notes and implementation details: [docs/architecture.md](./docs/architecture.md)
 
 <!-- release automation bootstrapped -->
