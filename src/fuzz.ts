@@ -140,3 +140,8 @@ export type {
   StatisticsOptions,
   StatisticsReport,
 } from "./statistics.js";
+export type {
+  ProgressEvent,
+  ProgressHook,
+  ProgressOptions,
+} from "./progress.js";

@@ -584,6 +584,24 @@ try {
 }
 ```
 
+### Progress hooks
+
+Every long-running runner (`fuzzValues`, `quickCheckValues`, `fuzzValuesMulti`, `fuzzFromCorpus`, `fuzzFromCorpusWithMutation`, plus their component-level wrappers) accepts an `onProgress` callback throttled by `progressIntervalMs` (default `1000`). The hook receives `{ iteration, elapsedMs, failures, totalRuns? }` so you can stream a status line during a long fuzz run without polluting fast paths with per-iteration logging.
+
+```ts
+await fuzzValues({
+  schema,
+  numRuns: 10_000,
+  progressIntervalMs: 2_000,
+  onProgress({ iteration, totalRuns, failures, elapsedMs }) {
+    console.log(`[${elapsedMs}ms] ${iteration}/${totalRuns} (${failures} failures)`);
+  },
+  run: executeSearch,
+});
+```
+
+The hook always fires once on completion (or before throwing) so the final iteration / failure count is reported even when the configured interval would otherwise suppress it. Use `progressIntervalMs: 0` to receive an event after every iteration.
+
 ### Time budget
 
 All value- and component-based fuzzers accept `timeoutMs` (wall-clock interrupt, not marked as a failure) and `perRunTimeoutMs` (per-iteration hard timeout) on top of `numRuns`.

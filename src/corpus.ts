@@ -1,6 +1,7 @@
 import { fileURLToPath } from "node:url";
 import { loadCorpus as loadInternal, saveCorpus as saveInternal } from "./fuzz_internal.js";
 import { ValueFuzzError, type ValueRunner } from "./input_fuzz.js";
+import { createProgressTracker, type ProgressOptions } from "./progress.js";
 
 export type CorpusLocation = {
   corpusPath: string | URL;
@@ -18,10 +19,11 @@ export type CorpusReport<Input> = {
   total: number;
 };
 
-export type FuzzFromCorpusOptions<Input = unknown> = CorpusLocation & {
-  collectAllFailures?: boolean;
-  run: ValueRunner<Input>;
-};
+export type FuzzFromCorpusOptions<Input = unknown> = CorpusLocation &
+  ProgressOptions & {
+    collectAllFailures?: boolean;
+    run: ValueRunner<Input>;
+  };
 
 const normalizePath = (target: string | URL) =>
   target instanceof URL ? fileURLToPath(target) : target;
@@ -60,6 +62,7 @@ export const fuzzFromCorpus = async <Input = unknown>(
   const corpus = loadInternal<Input>(resolved);
   const run = resolveRun(options.run);
   const failures: CorpusFailure<Input>[] = [];
+  const progress = createProgressTracker(options);
   let passed = 0;
 
   for (let index = 0; index < corpus.length; index++) {
@@ -70,13 +73,17 @@ export const fuzzFromCorpus = async <Input = unknown>(
     } catch (cause) {
       failures.push({ cause, index, value });
       if (!options.collectAllFailures) {
+        await progress.finalize(index + 1, failures.length, corpus.length);
         throw new ValueFuzzError(`corpus entry ${index} failed`, {
           cause,
           failingValue: value,
         });
       }
     }
+    await progress.tick(index + 1, failures.length, corpus.length);
   }
+
+  await progress.finalize(corpus.length, failures.length, corpus.length);
 
   return {
     failures,

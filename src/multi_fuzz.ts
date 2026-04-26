@@ -10,6 +10,7 @@ import {
   type SourceOptions,
 } from "./fuzz_data.js";
 import type { ValueRunner } from "./input_fuzz.js";
+import { createProgressTracker, type ProgressOptions } from "./progress.js";
 import type { StandardSchemaLike } from "./schema.js";
 
 export type MultiFailure<Input> = {
@@ -30,7 +31,8 @@ export type ValueFuzzMultiOptions<
   Input = unknown,
   Schema extends StandardSchemaLike = StandardSchemaLike,
 > = SourceOptions &
-  SchemaOptions<Schema> & {
+  SchemaOptions<Schema> &
+  ProgressOptions & {
     maxFailures?: number;
     numRuns?: number;
     run: ValueRunner<Input>;
@@ -85,12 +87,14 @@ export const fuzzValuesMulti = async <Input = unknown>(
 
   const seen = new Set<string>();
   const failures: MultiFailure<Input>[] = [];
+  const progress = createProgressTracker(options);
   let iterations = 0;
 
   for (const candidate of samples) {
     iterations += 1;
     const normalized = normalizeFuzzValue(candidate, resolved.schemaSupport);
     if (!normalized.ok) {
+      await progress.tick(iterations, failures.length, numRuns);
       continue;
     }
     try {
@@ -110,7 +114,10 @@ export const fuzzValuesMulti = async <Input = unknown>(
         break;
       }
     }
+    await progress.tick(iterations, failures.length, numRuns);
   }
+
+  await progress.finalize(iterations, failures.length, numRuns);
 
   return {
     failures,

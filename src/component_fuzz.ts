@@ -12,6 +12,7 @@ import {
   type ValueQuickCheckOptions,
 } from "./input_fuzz.js";
 import type { InputDescriptorTransform, SchemaOptions, SourceOptions } from "./fuzz_data.js";
+import type { ProgressOptions } from "./progress.js";
 
 export type ComponentRenderStrategy<Component, Input = unknown> =
   | ((input: Input) => unknown | Promise<unknown>)
@@ -20,14 +21,14 @@ export type ComponentRenderStrategy<Component, Input = unknown> =
       render: (component: Component, input: unknown) => unknown | Promise<unknown>;
     };
 
-export type ComponentFuzzOptions<Component, Input = unknown, Schema extends StandardSchemaLike = StandardSchemaLike> = SourceOptions & SchemaOptions<Schema> & {
+export type ComponentFuzzOptions<Component, Input = unknown, Schema extends StandardSchemaLike = StandardSchemaLike> = SourceOptions & SchemaOptions<Schema> & ProgressOptions & {
   component: Component;
   numRuns?: number;
   render: ComponentRenderStrategy<Component, Input>;
   seed?: number;
 };
 
-export type ComponentGuidedFuzzOptions<Component, Input = unknown, Schema extends StandardSchemaLike = StandardSchemaLike> = SourceOptions & SchemaOptions<Schema> & {
+export type ComponentGuidedFuzzOptions<Component, Input = unknown, Schema extends StandardSchemaLike = StandardSchemaLike> = SourceOptions & SchemaOptions<Schema> & ProgressOptions & {
   component: Component;
   corpusPath?: string | URL;
   initialCorpusSize?: number;
@@ -36,7 +37,7 @@ export type ComponentGuidedFuzzOptions<Component, Input = unknown, Schema extend
   seed?: number;
 };
 
-export type ComponentQuickCheckOptions<Component, Input = unknown, Schema extends StandardSchemaLike = StandardSchemaLike> = SourceOptions & SchemaOptions<Schema> & {
+export type ComponentQuickCheckOptions<Component, Input = unknown, Schema extends StandardSchemaLike = StandardSchemaLike> = SourceOptions & SchemaOptions<Schema> & ProgressOptions & {
   component: Component;
   maxCases?: number;
   render: ComponentRenderStrategy<Component, Input>;
