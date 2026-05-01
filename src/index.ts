@@ -29,6 +29,7 @@ export {
   ValueFuzzError,
   appendToCorpus,
   collectStatistics,
+  formatGuidedReport,
   formatStatistics,
   fuzzAssociative,
   fuzzCommutative,

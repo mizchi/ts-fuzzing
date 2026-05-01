@@ -132,6 +132,7 @@ export type {
 } from "./mutation.js";
 export {
   collectStatistics,
+  formatGuidedReport,
   formatStatistics,
 } from "./statistics.js";
 export type {

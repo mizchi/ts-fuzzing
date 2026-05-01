@@ -14,7 +14,7 @@ Generate values from TypeScript types or schemas, then run quick-checks or fuzzi
 | Differential | `fuzzDifferential` |
 | Corpus / regression | `loadCorpus`, `saveCorpus`, `appendToCorpus`, `fuzzFromCorpus`, `fuzzFromCorpusWithMutation` |
 | Mutation | `mutateValue`, `generateMutations` |
-| Statistics | `collectStatistics`, `formatStatistics` |
+| Statistics | `collectStatistics`, `formatStatistics`, `formatGuidedReport` |
 | Failure tooling | `ValueFuzzError`, `ComponentFuzzError`, `renderReproTest`, `writeReproTest` |
 | Low-level | `analyzeTypeDescriptor`, `analyzePropsDescriptor`, `arbitraryFromDescriptor`, `boundaryValuesFromDescriptor`, `schemaSupportFromSchema` |
 | Marker types | `UUID`, `ULID`, `ISODateString`, `Int`, `Float`, `Min`, `Max`, `MinLength`, `MaxLength`, `MinItems`, `MaxItems`, `Pattern<...>` |
@@ -500,6 +500,8 @@ console.log(formatStatistics(report));
 ```
 
 Return an array from `classify` to attach multiple labels per input (e.g. `["even", "boundary"]`) and `undefined` to skip the input from the histogram.
+
+`formatGuidedReport(report)` produces the equivalent text summary for the `GuidedCoverageReport` returned by `fuzzValuesGuided` / `fuzzComponentGuided`: total iterations, corpus size, every discovery with its iteration, reason, and the input that surfaced it.
 
 ### Mutation
 
