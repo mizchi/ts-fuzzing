@@ -1,6 +1,10 @@
 import { describe, expect, test } from "vitest";
 import * as z from "zod";
-import { collectStatistics, formatStatistics } from "../src/index.js";
+import {
+  collectStatistics,
+  formatGuidedReport,
+  formatStatistics,
+} from "../src/index.js";
 
 const schema = z.object({ n: z.number().int().min(0).max(9) });
 
@@ -90,5 +94,54 @@ describe("formatStatistics", () => {
     expect(
       formatStatistics({ buckets: [], iterations: 0, warnings: [] }),
     ).toContain("no labels classified");
+  });
+});
+
+describe("formatGuidedReport", () => {
+  test("renders the corpus / discovery summary on multiple lines", () => {
+    const formatted = formatGuidedReport({
+      corpusSize: 12,
+      discoveries: [
+        { input: { n: 5 }, iteration: 3, newBlocks: 2, reason: "coverage", totalBlocks: 12 },
+        { input: { n: 7 }, iteration: 9, newBlocks: 1, reason: "failure", totalBlocks: 13 },
+      ],
+      discoveredBlocks: 13,
+      iterations: 50,
+      loadedCorpusSize: 4,
+      warnings: [],
+    });
+
+    expect(formatted).toContain("Iterations: 50");
+    expect(formatted).toContain("Corpus: 12");
+    expect(formatted).toContain("(loaded 4)");
+    expect(formatted).toContain("Discovered blocks: 13");
+    expect(formatted).toContain("Discoveries (2):");
+    expect(formatted).toContain("cov");
+    expect(formatted).toContain("fail");
+    expect(formatted).toContain('{"n":5}');
+    expect(formatted).toContain('{"n":7}');
+  });
+
+  test("notes when no discoveries were made", () => {
+    const formatted = formatGuidedReport({
+      corpusSize: 0,
+      discoveries: [],
+      discoveredBlocks: 0,
+      iterations: 10,
+      warnings: [],
+    });
+    expect(formatted).toContain("No new discoveries.");
+  });
+
+  test("lists warnings when present", () => {
+    const formatted = formatGuidedReport({
+      corpusSize: 0,
+      discoveries: [],
+      discoveredBlocks: 0,
+      iterations: 0,
+      warnings: ["something to know"],
+    });
+    expect(formatted).toContain("Warnings (1):");
+    expect(formatted).toContain("something to know");
   });
 });

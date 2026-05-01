@@ -8,6 +8,7 @@ import {
   type SchemaOptions,
   type SourceOptions,
 } from "./fuzz_data.js";
+import type { GuidedCoverageReport } from "./input_fuzz.js";
 import type { StandardSchemaLike } from "./schema.js";
 
 export type ClassifyFn<Input> = (value: Input) => string | string[] | undefined;
@@ -105,5 +106,49 @@ export const formatStatistics = (report: StatisticsReport): string => {
     const count = String(bucket.count).padStart(widthCount);
     return `${percent}%  [${count}/${total}]  ${bucket.label.padEnd(widthLabel)}`;
   });
+  return lines.join("\n");
+};
+
+const formatDiscoveryInput = (input: unknown) => {
+  try {
+    return JSON.stringify(input);
+  } catch {
+    return String(input);
+  }
+};
+
+export const formatGuidedReport = (report: GuidedCoverageReport): string => {
+  const lines: string[] = [];
+  lines.push(
+    `Iterations: ${report.iterations}    Corpus: ${report.corpusSize}` +
+      (report.loadedCorpusSize !== undefined
+        ? ` (loaded ${report.loadedCorpusSize})`
+        : "") +
+      `    Discovered blocks: ${report.discoveredBlocks}`,
+  );
+  if (report.warnings.length > 0) {
+    lines.push(`Warnings (${report.warnings.length}):`);
+    for (const warning of report.warnings) {
+      lines.push(`  - ${warning}`);
+    }
+  }
+  if (report.discoveries.length === 0) {
+    lines.push("No new discoveries.");
+    return lines.join("\n");
+  }
+  lines.push(`Discoveries (${report.discoveries.length}):`);
+  const widthIter = String(report.iterations).length;
+  const widthBlocks = report.discoveries.reduce(
+    (max, discovery) => Math.max(max, String(discovery.newBlocks).length),
+    1,
+  );
+  for (const discovery of report.discoveries) {
+    const iter = String(discovery.iteration).padStart(widthIter);
+    const blocks = String(discovery.newBlocks).padStart(widthBlocks);
+    const reason = discovery.reason === "failure" ? "fail" : "cov ";
+    lines.push(
+      `  iter ${iter}  ${reason}  +${blocks} blocks (total ${discovery.totalBlocks})  ${formatDiscoveryInput(discovery.input)}`,
+    );
+  }
   return lines.join("\n");
 };

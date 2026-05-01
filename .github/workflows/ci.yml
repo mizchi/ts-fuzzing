@@ -35,6 +35,14 @@ jobs:
         run: pnpm install --frozen-lockfile
         working-directory: examples/simple
 
+      - name: Install vue-first example dependencies
+        run: pnpm install --frozen-lockfile
+        working-directory: examples/vue-first
+
+      - name: Install svelte-first example dependencies
+        run: pnpm install --frozen-lockfile
+        working-directory: examples/svelte-first
+
       - name: Typecheck
         run: pnpm typecheck
 
@@ -59,3 +67,11 @@ jobs:
       - name: Simple example standalone typecheck
         run: pnpm typecheck
         working-directory: examples/simple
+
+      - name: Vue example standalone test
+        run: pnpm test
+        working-directory: examples/vue-first
+
+      - name: Svelte example standalone test
+        run: pnpm test
+        working-directory: examples/svelte-first
