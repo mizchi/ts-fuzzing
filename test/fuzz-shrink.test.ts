@@ -102,6 +102,30 @@ describe("shrinkValue", () => {
     expect(result.minimizedValue.n).toBeLessThanOrEqual(100);
   });
 
+  test("passes the schema-normalized value to run, not the raw candidate", async () => {
+    // The schema strips extra keys when normalizing, so the runner should see
+    // only the declared keys even if the candidate (or the original value)
+    // carries extra ones.
+    const schema = z.object({ n: z.number().int().min(0).max(100) }).strip();
+    type Input = z.infer<typeof schema>;
+    const observed: Array<Record<string, unknown>> = [];
+    await shrinkValue<Input>({
+      schema,
+      value: { n: 77, extraKey: "leak" } as unknown as Input,
+      maxAttempts: 8,
+      run(value) {
+        observed.push(value as Record<string, unknown>);
+        if ((value as Input).n >= 50) {
+          throw new Error("threshold");
+        }
+      },
+    });
+    expect(observed.length).toBeGreaterThan(0);
+    for (const seen of observed) {
+      expect("extraKey" in seen).toBe(false);
+    }
+  });
+
   test("respects maxAttempts as a CI safety net", async () => {
     const result = await shrinkValue<number[]>({
       value: Array.from({ length: 30 }, (_unused, index) => index),

@@ -52,6 +52,11 @@ describe("pickPaths runtime helper", () => {
       value: { uuid: "value-uuid", text: "hello" },
       parent: { uuid: "parent" },
     });
+    expectTypeOf(projection.value.uuid).toEqualTypeOf<string>();
+    expectTypeOf(projection.value.text).toEqualTypeOf<string>();
+    expectTypeOf(projection.parent.uuid).toEqualTypeOf<string>();
+    // @ts-expect-error classes was not part of the projection
+    void projection.value.classes;
   });
 });
 
@@ -63,7 +68,7 @@ describe("rebuildFrom runtime helper", () => {
     const reconstructed = rebuildFrom(projection, fullNode, [
       "value.uuid",
       "value.text",
-    ]);
+    ] as const);
     expect(reconstructed.value.uuid).toBe("PROJ");
     expect(reconstructed.value.text).toBe("PROJ-TEXT");
     // unrelated fields preserved from defaults
@@ -75,7 +80,7 @@ describe("rebuildFrom runtime helper", () => {
   });
 
   test("survives a missing projection path by keeping the default", () => {
-    const reconstructed = rebuildFrom({}, fullNode, ["value.text"]);
+    const reconstructed = rebuildFrom({}, fullNode, ["value.text"] as const);
     expect(reconstructed.value.text).toBe("hello");
   });
 });

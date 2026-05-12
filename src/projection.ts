@@ -60,12 +60,12 @@ const writePath = (target: Record<string, unknown>, path: string, value: unknown
 export const pickPaths = <T, Paths extends readonly string[]>(
   source: T,
   paths: Paths,
-): Pick<T, never> extends never ? unknown : unknown => {
+): ProjectFuzz<T, Paths[number]> => {
   const result: Record<string, unknown> = {};
   for (const path of paths) {
     writePath(result, path, readPath(source, path));
   }
-  return result as Pick<T, never> extends never ? unknown : unknown;
+  return result as ProjectFuzz<T, Paths[number]>;
 };
 
 const deepClone = <T>(value: T): T => {
@@ -80,10 +80,10 @@ const deepClone = <T>(value: T): T => {
   return result as T;
 };
 
-export const rebuildFrom = <Target, Projection extends Partial<Record<string, unknown>>>(
-  projection: Projection,
+export const rebuildFrom = <Target, Paths extends readonly string[]>(
+  projection: Partial<ProjectFuzz<Target, Paths[number]>>,
   defaults: Target,
-  paths: readonly string[],
+  paths: Paths,
 ): Target => {
   const next = deepClone(defaults);
   for (const path of paths) {

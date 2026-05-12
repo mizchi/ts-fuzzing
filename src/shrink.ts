@@ -203,9 +203,17 @@ export const shrinkValue = async <Input = unknown>(
   const deadline = options.timeoutMs ? Date.now() + options.timeoutMs : Infinity;
   const failureSignature = options.failureSignature ?? runFailureSignature;
 
+  let baselineExecutionValue: unknown = options.value;
+  if (schemaSupport) {
+    const baselineNormalized = normalizeFuzzValue(options.value, schemaSupport);
+    if (baselineNormalized.ok) {
+      baselineExecutionValue = baselineNormalized.value;
+    }
+  }
+
   let baselineSignature: string | undefined;
   try {
-    await options.run(options.value);
+    await options.run(baselineExecutionValue as Input);
     return {
       accepted: 0,
       attempts: 0,
@@ -218,6 +226,12 @@ export const shrinkValue = async <Input = unknown>(
   }
 
   let current: unknown = options.value;
+  if (schemaSupport) {
+    const normalizedRoot = normalizeFuzzValue(current, schemaSupport);
+    if (normalizedRoot.ok) {
+      current = normalizedRoot.value;
+    }
+  }
   let attempts = 0;
   let accepted = 0;
   let progressed = true;
@@ -229,18 +243,20 @@ export const shrinkValue = async <Input = unknown>(
         break;
       }
       attempts += 1;
+      let executionValue: unknown = candidate;
       if (schemaSupport) {
         const normalized = normalizeFuzzValue(candidate, schemaSupport);
         if (!normalized.ok) {
           continue;
         }
+        executionValue = normalized.value;
       }
       try {
-        await options.run(candidate as Input);
+        await options.run(executionValue as Input);
       } catch (cause) {
         const candidateSignature = failureSignature(cause);
         if (candidateSignature === baselineSignature) {
-          current = candidate;
+          current = executionValue;
           accepted += 1;
           progressed = true;
           break;

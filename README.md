@@ -529,14 +529,20 @@ type TextNode = {
 
 type TextFuzzInput = ProjectFuzz<TextNode, "value.uuid" | "value.text" | "value.classes">;
 
+const paths = ["value.uuid", "value.text", "value.classes"] as const;
+
 await fuzzValues<TextFuzzInput>({
   sourcePath,
   typeName: "TextFuzzInput",
   run(input) {
-    const node = rebuildFrom(input, defaultNode, ["value.uuid", "value.text", "value.classes"]);
+    const node = rebuildFrom(input, defaultNode, paths);
     visit(node);
   },
 });
+
+// pickPaths preserves the projected type when paths are passed `as const`:
+// type Projection = typeof projection;  // → { value: { uuid: string; text: string; classes: string[] } }
+const projection = pickPaths(fullNode, paths);
 ```
 
 ### Custom type adapters
