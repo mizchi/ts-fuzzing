@@ -18,7 +18,7 @@ Generate values from TypeScript types or schemas, then run quick-checks or fuzzi
 | Statistics | `collectStatistics`, `formatStatistics`, `formatGuidedReport` |
 | Failure tooling | `ValueFuzzError`, `ComponentFuzzError`, `renderReproTest`, `writeReproTest` |
 | Security corpora | `xssPayloads`, `xssCorpus`, `xssPayloadsByCategory`, `XssPayload` (`ts-fuzzing/security`) |
-| Low-level | `analyzeTypeDescriptor`, `analyzePropsDescriptor`, `arbitraryFromDescriptor`, `boundaryValuesFromDescriptor`, `schemaSupportFromSchema` |
+| Low-level | `analyzeTypeDescriptor`, `analyzePropsDescriptor`, `arbitraryFromDescriptor`, `boundaryValuesFromDescriptor`, `schemaSupportFromSchema`, `shrinkValue`, `pickPaths`, `rebuildFrom` |
 | Marker types | `UUID`, `ULID`, `ISODateString`, `Int`, `Float`, `Min`, `Max`, `MinLength`, `MaxLength`, `MinItems`, `MaxItems`, `Pattern<...>` |
 
 ## Install
@@ -487,6 +487,72 @@ await fuzzValues<{ enabled: boolean }>({
 ```
 
 The widening applies to every `boolean` position reached by walking the descriptor tree (objects, arrays, tuples, unions, maps, and sets). Schema sources still apply their normalizers, so falsy-aware mode is most useful with a TypeScript source path where there is no runtime validation gate.
+
+### Shrinking failing values
+
+`shrinkValue` walks a failing value and tries structurally smaller candidates — shorter arrays, fewer object keys, smaller strings, numbers moving toward zero — keeping any that still fail under the same failure signature. Use it when a fuzz failure carries a large value and you want a minimal repro to commit or share.
+
+```ts
+import { shrinkValue, ValueFuzzError, fuzzValues } from "ts-fuzzing";
+
+try {
+  await fuzzValues<Input>({ sourcePath, typeName: "Input", run: consume });
+} catch (error) {
+  if (error instanceof ValueFuzzError) {
+    const result = await shrinkValue<Input>({
+      sourcePath,
+      typeName: "Input",
+      value: error.failingValue as Input,
+      run: consume,
+    });
+    console.log("minimized:", result.minimizedValue);
+    console.log("attempts:", result.attempts);
+  }
+  throw error;
+}
+```
+
+The shrinker accepts `failureSignature?: (cause) => string` so different exceptions don't get "shrunk into" each other, and `maxAttempts` / `timeoutMs` as CI safety nets.
+
+### Shape projection
+
+`ProjectFuzz<T, Paths>` derives a flat fuzz-input type by selecting dot-paths from a deeply nested target type. The runtime helpers `pickPaths` and `rebuildFrom` round-trip values between the full shape and the projection so a fuzz test exercises only the fields the test cares about.
+
+```ts
+import type { ProjectFuzz } from "ts-fuzzing";
+import { pickPaths, rebuildFrom, fuzzValues } from "ts-fuzzing";
+
+type TextNode = {
+  uuid: string;
+  value: { uuid: string; text: string; classes: string[] };
+};
+
+type TextFuzzInput = ProjectFuzz<TextNode, "value.uuid" | "value.text" | "value.classes">;
+
+await fuzzValues<TextFuzzInput>({
+  sourcePath,
+  typeName: "TextFuzzInput",
+  run(input) {
+    const node = rebuildFrom(input, defaultNode, ["value.uuid", "value.text", "value.classes"]);
+    visit(node);
+  },
+});
+```
+
+### Custom type adapters
+
+For opaque external types (SDK class instances, branded runtime wrappers, validator instance types), `typeAdapters` overrides how a specific symbol is described — supply a descriptor directly or a factory that returns one. The same option flows through `analyzeTypeDescriptor`, `resolveFuzzData`, `fuzzValues`, and friends.
+
+```ts
+import { fuzzValues, type TypeAdapters } from "ts-fuzzing";
+
+const adapters: TypeAdapters = {
+  Decimal: { kind: "number", integer: false, constraints: { min: 0, max: 1_000 } },
+  ObjectId: () => ({ kind: "string", constraints: { pattern: "^[a-f0-9]{24}$" } }),
+};
+
+await fuzzValues({ sourcePath, typeName: "Input", typeAdapters: adapters, run });
+```
 
 ### Differential testing
 

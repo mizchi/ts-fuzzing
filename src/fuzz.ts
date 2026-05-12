@@ -83,6 +83,8 @@ export type {
 } from "./invariants.js";
 export { fuzzDifferential } from "./differential.js";
 export type { DifferentialFuzzOptions } from "./differential.js";
+export { shrinkValue } from "./shrink.js";
+export type { ShrinkValueOptions, ShrinkValueResult } from "./shrink.js";
 export {
   renderReproTest,
   writeReproTest,

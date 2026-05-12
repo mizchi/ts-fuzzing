@@ -9,10 +9,14 @@ import type {
 } from "./descriptor.js";
 import { prepareFrameworkSource } from "./framework_source.js";
 
+export type TypeAdapter = TypeDescriptor | (() => TypeDescriptor);
+export type TypeAdapters = Record<string, TypeAdapter>;
+
 type AnalyzeTypeOptions = {
   exportName?: string;
   typeName?: string;
   sourcePath: string;
+  typeAdapters?: TypeAdapters;
 };
 
 type Context = {
@@ -20,7 +24,22 @@ type Context = {
   pending: Set<number>;
   seen: Map<number, TypeDescriptor>;
   substitutions?: Map<number, ts.Type>;
+  typeAdapters?: TypeAdapters;
   warnings: Set<string>;
+};
+
+const resolveTypeAdapter = (
+  adapters: TypeAdapters | undefined,
+  name: string | undefined,
+): TypeDescriptor | undefined => {
+  if (!adapters || !name) {
+    return undefined;
+  }
+  const adapter = adapters[name];
+  if (!adapter) {
+    return undefined;
+  }
+  return typeof adapter === "function" ? adapter() : adapter;
 };
 
 export type AnalyzeTypeResult = {
@@ -801,7 +820,12 @@ const describeType = (
   const typeSymbolName = getTypeSymbolName(type);
   let descriptor: TypeDescriptor;
 
-  if (isReactNodeType(typeText) || typeSymbolName === "ReactNode") {
+  const adapterMatch =
+    resolveTypeAdapter(context.typeAdapters, typeSymbolName) ??
+    resolveTypeAdapter(context.typeAdapters, typeText);
+  if (adapterMatch) {
+    descriptor = adapterMatch;
+  } else if (isReactNodeType(typeText) || typeSymbolName === "ReactNode") {
     descriptor = { kind: "react-node" };
   } else if (typeSymbolName === "URL" || typeText === "URL") {
     descriptor = { kind: "url" };
@@ -1144,6 +1168,7 @@ export const analyzeTypeInfo = (options: AnalyzeTypeOptions): AnalyzeTypeResult 
     checker,
     pending: new Set<number>(),
     seen: new Map<number, TypeDescriptor>(),
+    typeAdapters: options.typeAdapters,
     warnings: new Set<string>(),
   };
   return {

@@ -1,4 +1,5 @@
 export { analyzePropsDescriptor, analyzeTypeDescriptor } from "./analyzer.js";
+export type { TypeAdapter, TypeAdapters } from "./analyzer.js";
 export { arbitraryFromDescriptor } from "./arbitrary.js";
 export { boundaryValuesFromDescriptor } from "./boundary.js";
 export type {
@@ -71,6 +72,7 @@ export {
   samplePropsFromSchema,
   sampleProps,
   saveCorpus,
+  shrinkValue,
   writeReproTest,
 } from "./fuzz.js";
 export type {
@@ -114,6 +116,8 @@ export type {
   ReproWriteOptions,
   ResolvedFuzzData,
   RoundtripInvariantOptions,
+  ShrinkValueOptions,
+  ShrinkValueResult,
   SchemaOptions,
   SemigroupInvariantOptions,
   StatisticsBucket,
@@ -131,5 +135,7 @@ export type {
   VariantStrategy,
   SourceOptions,
 } from "./fuzz.js";
+export { pickPaths, rebuildFrom } from "./projection.js";
+export type { ProjectFuzz } from "./projection.js";
 export { schemaSupportFromSchema } from "./schema.js";
 export type { StandardSchemaLike } from "./schema.js";
