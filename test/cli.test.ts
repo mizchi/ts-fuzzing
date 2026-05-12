@@ -1,7 +1,8 @@
 import { execFileSync } from "node:child_process";
+import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
-import { describe, expect, test } from "vitest";
+import { beforeAll, describe, expect, test } from "vitest";
 
 const cliPath = fileURLToPath(new URL("../bin/ts-fuzzing.mjs", import.meta.url));
 const repoRoot = path.dirname(path.dirname(cliPath));
@@ -9,6 +10,15 @@ const repoRoot = path.dirname(path.dirname(cliPath));
 const fixturePath = (relative: string) => path.join(repoRoot, "test", "fixtures", relative);
 
 describe("ts-fuzzing CLI", () => {
+  beforeAll(() => {
+    // The CLI imports `ts-fuzzing` which resolves through package.json#exports
+    // to dist/index.js, so we need a fresh build before the subprocess runs.
+    const dist = path.join(repoRoot, "dist", "index.js");
+    if (!existsSync(dist)) {
+      execFileSync("pnpm", ["build"], { cwd: repoRoot, stdio: "inherit" });
+    }
+  }, 120_000);
+
   test("prints usage when invoked without args", () => {
     let exitCode = 0;
     let stdout = "";
