@@ -25,7 +25,7 @@ export type {
   ValueQuickCheckOptions,
   ValueRunner,
 } from "./input_fuzz.js";
-export type { CoercionMode } from "./coercion.js";
+export type { CoercionMode, NullInjectionMode } from "./coercion.js";
 export {
   resolveFuzzData,
   resolveInputDescriptor,

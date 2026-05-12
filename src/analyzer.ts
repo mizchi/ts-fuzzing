@@ -805,6 +805,24 @@ const describeType = (
     descriptor = { kind: "react-node" };
   } else if (typeSymbolName === "URL" || typeText === "URL") {
     descriptor = { kind: "url" };
+  } else if (typeSymbolName === "Blob" || typeText === "Blob") {
+    descriptor = { kind: "host", host: "blob" };
+  } else if (typeSymbolName === "File" || typeText === "File") {
+    descriptor = { kind: "host", host: "file" };
+  } else if (typeSymbolName === "FormData" || typeText === "FormData") {
+    descriptor = { kind: "host", host: "form-data" };
+  } else if (typeSymbolName === "Headers" || typeText === "Headers") {
+    descriptor = { kind: "host", host: "headers" };
+  } else if (typeSymbolName === "URLSearchParams" || typeText === "URLSearchParams") {
+    descriptor = { kind: "host", host: "url-search-params" };
+  } else if (typeSymbolName === "AbortSignal" || typeText === "AbortSignal") {
+    descriptor = { kind: "host", host: "abort-signal" };
+  } else if (typeSymbolName === "Request" || typeText === "Request") {
+    descriptor = { kind: "host", host: "request" };
+  } else if (typeSymbolName === "Response" || typeText === "Response") {
+    descriptor = { kind: "host", host: "response" };
+  } else if (typeSymbolName === "Event" || typeText === "Event") {
+    descriptor = { kind: "host", host: "event" };
   } else if (typeSymbolName === "Map" || typeSymbolName === "ReadonlyMap") {
     const [keyType, valueType] = context.checker.getTypeArguments(type as ts.TypeReference);
     descriptor = {

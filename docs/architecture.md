@@ -44,7 +44,8 @@ The component APIs are adapters over the generic value fuzzing layer, not the ot
 - unresolved generic parameters use their `extends` constraint when it can be generalized into a descriptor
 - unresolved conditional types are generalized only when their checked type has a usable `extends` constraint and the branches do not depend on `infer`; `infer`-heavy conditionals still fall back to `unknown`
 - nongeneralizable generics fall back to `unknown` and surface runtime warnings; nested generic instantiations with unresolved parameters share the same fallback
-- common external runtime types such as `ReactNode`, `URL`, `Map`, and `Set` are normalized before generic object expansion; DOM / Web API host types (`File`, `Blob`, `Headers`, `Response`, …) are still expanded as plain object descriptors and may emit warnings
+- common external runtime types such as `ReactNode`, `URL`, `Map`, and `Set` are normalized before generic object expansion
+- DOM / Web API host types — `Blob`, `File`, `FormData`, `Headers`, `URLSearchParams`, `AbortSignal`, `Request`, `Response`, `Event` — are normalized into a dedicated `host` descriptor and produce real runtime instances via `src/host_types.ts`
 - imported validator instance types from `zod` / `valibot` are detected as schema-backed and prefer the schema path; using them as plain TypeScript types may expand into large object descriptors and is intentionally not encouraged
 - `zod` and `valibot` can describe values directly
 - generic `Standard Schema` integration is used as a validation and normalization overlay when no direct descriptor is available

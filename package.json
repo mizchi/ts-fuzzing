@@ -38,6 +38,7 @@
     "examples:test": "pnpm -C examples/simple test && pnpm -C examples/react-first test && pnpm -C examples/vue-first test && pnpm -C examples/svelte-first test",
     "examples:typecheck": "pnpm -C examples/simple typecheck && pnpm -C examples/react-first typecheck && pnpm -C examples/vue-first typecheck && pnpm -C examples/svelte-first typecheck",
     "verify": "pnpm typecheck && pnpm test && pnpm build",
+    "smoke": "node scripts/smoke-test.mjs",
     "verify:examples": "pnpm examples:typecheck && pnpm examples:test",
     "verify:all": "pnpm verify && pnpm verify:examples"
   },

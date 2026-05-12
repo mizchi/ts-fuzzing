@@ -3,6 +3,7 @@ export { arbitraryFromDescriptor } from "./arbitrary.js";
 export { boundaryValuesFromDescriptor } from "./boundary.js";
 export type {
   FuzzConstraints,
+  HostType,
   ObjectDescriptor,
   PropertyDescriptor,
   TypeDescriptor,
@@ -80,6 +81,7 @@ export type {
   ClassifyFn,
   CommutativeInvariantOptions,
   CoercionMode,
+  NullInjectionMode,
   CommutativeMonoidInvariantOptions,
   ComponentRenderStrategy,
   CorpusFailure,

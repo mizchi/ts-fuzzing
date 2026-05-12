@@ -52,6 +52,22 @@ export type UrlDescriptor = {
   kind: "url";
 };
 
+export type HostType =
+  | "blob"
+  | "file"
+  | "form-data"
+  | "headers"
+  | "url-search-params"
+  | "abort-signal"
+  | "request"
+  | "response"
+  | "event";
+
+export type HostDescriptor = {
+  kind: "host";
+  host: HostType;
+};
+
 export type MapDescriptor = {
   kind: "map";
   key: TypeDescriptor;
@@ -94,6 +110,7 @@ export type TypeDescriptor =
   | ArrayDescriptor
   | BooleanDescriptor
   | FunctionDescriptor
+  | HostDescriptor
   | LiteralDescriptor
   | NullDescriptor
   | NumberDescriptor
