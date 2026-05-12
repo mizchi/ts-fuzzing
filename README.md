@@ -10,6 +10,7 @@ Generate values from TypeScript types or schemas, then run quick-checks or fuzzi
 | Property-based fuzzing | `fuzzValues`, `quickCheckValues`, `fuzzValuesGuided`, `fuzzValuesMulti`, `replayValues`, `replayFromError` |
 | Component fuzzing | `fuzzComponent`, `quickCheckComponent`, `fuzzComponentGuided`, `fuzzReactComponent` (`ts-fuzzing/react`), `createVueDomRender` (`ts-fuzzing/vue`), `createSvelteRender` (`ts-fuzzing/svelte`) |
 | Invariant helpers | `fuzzRoundtrip`, `fuzzIdempotent`, `fuzzCommutative`, `fuzzAssociative`, `fuzzMonotonic` |
+| Algebraic bundles | `fuzzSemigroup`, `fuzzMonoid`, `fuzzCommutativeMonoid`, `fuzzFunctor` |
 | Stateful / sequence | `fuzzStateful`, `StatefulFuzzError` |
 | Differential | `fuzzDifferential` |
 | Corpus / regression | `loadCorpus`, `saveCorpus`, `appendToCorpus`, `fuzzFromCorpus`, `fuzzFromCorpusWithMutation` |
@@ -374,6 +375,37 @@ test("doubling is monotonic", async () => {
 });
 ```
 
+### Algebraic invariant bundles
+
+`fuzzSemigroup`, `fuzzMonoid`, `fuzzCommutativeMonoid`, and `fuzzFunctor` bundle the underlying property checks (associativity, identity, commutativity, functor laws) so a single call asserts a complete algebraic structure rather than three separate calls.
+
+```ts
+import { fuzzCommutativeMonoid, fuzzMonoid, fuzzSemigroup } from "ts-fuzzing";
+
+// associativity only
+await fuzzSemigroup({ schema, op: concat });
+
+// associativity + left/right identity
+await fuzzMonoid({ schema, op: merge, identity: empty });
+
+// monoid + commutativity
+await fuzzCommutativeMonoid({ schema, op: union, identity: { items: [] } });
+```
+
+`fuzzFunctor` asserts both functor laws (`map(id) === id` and `map(g ∘ f) === map(g) ∘ map(f)`) against a container type plus its `map` operation:
+
+```ts
+import { fuzzFunctor } from "ts-fuzzing";
+
+await fuzzFunctor<Option<number>, number, number, number>({
+  schema: optionSchema,
+  map: Option.map,
+  composeFns: [(x) => x + 1, (x) => x * 2],
+});
+```
+
+Each helper accepts an `equals?: (a, b) => boolean` for custom structural equality. The default falls back to `Object.is` then `JSON.stringify`.
+
 ### XSS / escape-function fuzzing
 
 `ts-fuzzing/security` ships a curated XSS attack-string corpus for escape, sanitizer, and URL-validator tests. Random strings rarely surface the known XSS bug classes — using a corpus of known-bad payloads lets you assert "this transform survives all of these" without writing the corpus inline.
@@ -409,6 +441,28 @@ import { xssCorpus, xssPayloads, xssPayloadsByCategory } from "ts-fuzzing/securi
 ```
 
 Categories: `htmlTag`, `attribute`, `url`, `encoding`, `polyglot`, `css`, `template`, `bypass`.
+
+### Falsy-aware coercion mode
+
+JavaScript code routinely uses truthy / falsy coercion (`if (x)`, `x ?? y`, `x || z`) on values that TypeScript declares as `boolean`. A consumer that meets a `""`, `0`, or `undefined` at runtime can silently take the wrong branch even though the type system says it cannot happen.
+
+Set `coercion: "falsy-aware"` to widen `boolean` positions to a curated set (`true`, `false`, `0`, `""`, `null`, `undefined`, `"0"`, `"false"`, `" "`). The value is still typed as `boolean` to the runner — that is intentional, since the bug class is "what happens when this value is not really a boolean at runtime".
+
+```ts
+import { fuzzValues } from "ts-fuzzing";
+
+await fuzzValues<{ enabled: boolean }>({
+  sourcePath: new URL("./toggle.ts", import.meta.url),
+  typeName: "ToggleInput",
+  numRuns: 200,
+  coercion: "falsy-aware",
+  run({ enabled }) {
+    renderToggle(enabled);
+  },
+});
+```
+
+The widening applies to every `boolean` position reached by walking the descriptor tree (objects, arrays, tuples, unions, maps, and sets). Schema sources still apply their normalizers, so falsy-aware mode is most useful with a TypeScript source path where there is no runtime validation gate.
 
 ### Differential testing
 

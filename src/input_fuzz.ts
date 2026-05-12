@@ -2,6 +2,7 @@ import inspector from "node:inspector";
 import { fileURLToPath } from "node:url";
 import fc from "fast-check";
 import { arbitraryFromDescriptor } from "./arbitrary.js";
+import { applyCoercion, type CoercionMode } from "./coercion.js";
 import {
   coverageKeysForTarget,
   DeterministicRng,
@@ -32,6 +33,7 @@ export type ValueRunner<Input = unknown> =
     };
 
 export type ValueFuzzOptions<Input = unknown, Schema extends StandardSchemaLike = StandardSchemaLike> = SourceOptions & SchemaOptions<Schema> & ProgressOptions & {
+  coercion?: CoercionMode;
   numRuns?: number;
   perRunTimeoutMs?: number;
   run: ValueRunner<Input>;
@@ -63,6 +65,7 @@ export type QuickCheckReport = {
 };
 
 export type ValueGuidedFuzzOptions<Input = unknown, Schema extends StandardSchemaLike = StandardSchemaLike> = SourceOptions & SchemaOptions<Schema> & ProgressOptions & {
+  coercion?: CoercionMode;
   corpusPath?: string | URL;
   initialCorpusSize?: number;
   maxIterations?: number;
@@ -71,6 +74,7 @@ export type ValueGuidedFuzzOptions<Input = unknown, Schema extends StandardSchem
 };
 
 export type ValueQuickCheckOptions<Input = unknown, Schema extends StandardSchemaLike = StandardSchemaLike> = SourceOptions & SchemaOptions<Schema> & ProgressOptions & {
+  coercion?: CoercionMode;
   maxCases?: number;
   run: ValueRunner<Input>;
 };
@@ -181,9 +185,12 @@ export const fuzzValues = async <Input = unknown>(
   emitFuzzWarnings(resolved.warnings);
   const run = resolveRun(options.run);
   const describeInput = resolveDescribeInput(options.run);
-  const inputDescriptor = resolveInputDescriptor(resolved.valueDescriptor, describeInput);
+  const inputDescriptor = applyCoercion(
+    resolveInputDescriptor(resolved.valueDescriptor, describeInput),
+    options.coercion,
+  );
   const arbitrary = (
-    resolved.schemaSupport
+    resolved.schemaSupport && options.coercion !== "falsy-aware"
       ? arbitraryFromDescriptor(inputDescriptor).filter((value) => resolved.schemaSupport!.normalizeSync(value).ok)
       : arbitraryFromDescriptor(inputDescriptor)
   ) as fc.Arbitrary<unknown>;
@@ -239,7 +246,10 @@ export const fuzzValuesGuided = async <Input = unknown>(
   emitFuzzWarnings(resolved.warnings);
   const run = resolveRun(options.run);
   const describeInput = resolveDescribeInput(options.run);
-  const inputDescriptor = resolveInputDescriptor(resolved.valueDescriptor, describeInput);
+  const inputDescriptor = applyCoercion(
+    resolveInputDescriptor(resolved.valueDescriptor, describeInput),
+    options.coercion,
+  );
   const rng = new DeterministicRng(options.seed ?? 1);
   const collector = new CoverageCollector();
   const initialCorpusSize = options.initialCorpusSize ?? 8;
@@ -363,7 +373,11 @@ export const quickCheckValues = async <Input = unknown>(
   const resolved = resolveFuzzData(options);
   emitFuzzWarnings(resolved.warnings);
   const run = resolveRun(options.run);
-  const describeInput = resolveDescribeInput(options.run);
+  const baseDescribeInput = resolveDescribeInput(options.run);
+  const describeInput: InputDescriptorTransform | undefined =
+    options.coercion === "falsy-aware"
+      ? (descriptor) => applyCoercion(baseDescribeInput ? baseDescribeInput(descriptor) : descriptor, options.coercion)
+      : baseDescribeInput;
   const cases: unknown[] = [];
   for await (const value of sampleBoundaryFuzzData(resolved, {
     describeInput,

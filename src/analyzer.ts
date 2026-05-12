@@ -253,6 +253,54 @@ const getTypeSymbolName = (type: ts.Type) => {
   return aliasSymbol?.getName() ?? type.symbol?.getName();
 };
 
+const VALIDATOR_PACKAGES = ["zod", "valibot", "@valibot/", "arktype", "@arktype/"] as const;
+
+const declarationPackage = (declaration: ts.Declaration | undefined): string | undefined => {
+  const fileName = declaration?.getSourceFile().fileName;
+  if (!fileName) {
+    return undefined;
+  }
+  for (const pkg of VALIDATOR_PACKAGES) {
+    if (fileName.includes(`/node_modules/${pkg}`)) {
+      return pkg.replace(/\/$/, "");
+    }
+  }
+  return undefined;
+};
+
+const isValidatorInstanceName = (name: string): boolean => {
+  if (name.startsWith("Zod") && name.length > 3) {
+    return true;
+  }
+  if (name.endsWith("Schema") || name.endsWith("Issue") || name.endsWith("Action")) {
+    return true;
+  }
+  return false;
+};
+
+const detectValidatorInstanceType = (type: ts.Type): string | undefined => {
+  const aliasSymbol = (type as ts.Type & { aliasSymbol?: ts.Symbol }).aliasSymbol;
+  const symbol = type.symbol;
+  if (!symbol) {
+    return undefined;
+  }
+  const symbolName = symbol.getName();
+  if (!isValidatorInstanceName(symbolName)) {
+    return undefined;
+  }
+  const declarations = [
+    ...(symbol.getDeclarations() ?? []),
+    ...(aliasSymbol?.getDeclarations() ?? []),
+  ];
+  for (const declaration of declarations) {
+    const pkg = declarationPackage(declaration);
+    if (pkg) {
+      return pkg;
+    }
+  }
+  return undefined;
+};
+
 const warnGenericFallback = (
   context: Context,
   typeName: string,
@@ -855,6 +903,15 @@ const describeType = (
     );
   } else if (type.getCallSignatures().length > 0) {
     descriptor = { kind: "function" };
+  } else if (detectValidatorInstanceType(type)) {
+    const validatorPackage = detectValidatorInstanceType(type)!;
+    const aliasName = (type as ts.Type & { aliasSymbol?: ts.Symbol }).aliasSymbol?.getName()
+      ?? type.symbol?.getName()
+      ?? typeText;
+    context.warnings.add(
+      `[ts-fuzzing] type "${aliasName}" is a ${validatorPackage} instance type and cannot be fuzzed structurally; pass the schema directly via the "schema" option or annotate the field with the schema's inferred type. falling back to unknown values`,
+    );
+    descriptor = { kind: "unknown" };
   } else {
     const properties = context.checker.getPropertiesOfType(type);
     if (properties.length > 0) {

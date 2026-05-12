@@ -25,6 +25,7 @@ export type {
   ValueQuickCheckOptions,
   ValueRunner,
 } from "./input_fuzz.js";
+export type { CoercionMode } from "./coercion.js";
 export {
   resolveFuzzData,
   resolveInputDescriptor,
@@ -60,16 +61,24 @@ export type {
 export {
   fuzzAssociative,
   fuzzCommutative,
+  fuzzCommutativeMonoid,
+  fuzzFunctor,
   fuzzIdempotent,
+  fuzzMonoid,
   fuzzMonotonic,
   fuzzRoundtrip,
+  fuzzSemigroup,
 } from "./invariants.js";
 export type {
   AssociativeInvariantOptions,
   CommutativeInvariantOptions,
+  CommutativeMonoidInvariantOptions,
+  FunctorInvariantOptions,
   IdempotentInvariantOptions,
+  MonoidInvariantOptions,
   MonotonicInvariantOptions,
   RoundtripInvariantOptions,
+  SemigroupInvariantOptions,
 } from "./invariants.js";
 export { fuzzDifferential } from "./differential.js";
 export type { DifferentialFuzzOptions } from "./differential.js";
