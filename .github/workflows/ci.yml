@@ -43,6 +43,10 @@ jobs:
         run: pnpm install --frozen-lockfile
         working-directory: examples/svelte-first
 
+      - name: Install schema-first example dependencies
+        run: pnpm install --frozen-lockfile
+        working-directory: examples/schema-first
+
       - name: Typecheck
         run: pnpm typecheck
 
@@ -75,3 +79,11 @@ jobs:
       - name: Svelte example standalone test
         run: pnpm test
         working-directory: examples/svelte-first
+
+      - name: Schema-first example standalone test
+        run: pnpm test
+        working-directory: examples/schema-first
+
+      - name: Schema-first example standalone typecheck
+        run: pnpm typecheck
+        working-directory: examples/schema-first

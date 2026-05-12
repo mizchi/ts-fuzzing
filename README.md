@@ -771,6 +771,7 @@ await fuzzValues({
 ## Examples and Docs
 
 - Runnable non-UI example: [examples/simple/README.md](./examples/simple/README.md)
+- Runnable schema-first example: [examples/schema-first/README.md](./examples/schema-first/README.md)
 - Runnable React adapter example: [examples/react-first/README.md](./examples/react-first/README.md)
 - Runnable Vue adapter example: [examples/vue-first/README.md](./examples/vue-first/README.md)
 - Runnable Svelte adapter example: [examples/svelte-first/README.md](./examples/svelte-first/README.md)

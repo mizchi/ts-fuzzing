@@ -24,6 +24,7 @@ export type {
   ValueGuidedFuzzOptions,
   ValueQuickCheckOptions,
   ValueRunner,
+  VariantStrategy,
 } from "./input_fuzz.js";
 export type { CoercionMode, NullInjectionMode } from "./coercion.js";
 export {

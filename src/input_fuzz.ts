@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import fc from "fast-check";
 import { arbitraryFromDescriptor } from "./arbitrary.js";
 import { applyCoercion, applyNullInjection, type CoercionMode, type NullInjectionMode } from "./coercion.js";
+import type { TypeDescriptor } from "./descriptor.js";
 import {
   coverageKeysForTarget,
   DeterministicRng,
@@ -32,6 +33,8 @@ export type ValueRunner<Input = unknown> =
       run: (input: Input) => unknown | Promise<unknown>;
     };
 
+export type VariantStrategy = "weighted" | "uniform";
+
 export type ValueFuzzOptions<Input = unknown, Schema extends StandardSchemaLike = StandardSchemaLike> = SourceOptions & SchemaOptions<Schema> & ProgressOptions & {
   coercion?: CoercionMode;
   nullInjection?: NullInjectionMode;
@@ -40,6 +43,7 @@ export type ValueFuzzOptions<Input = unknown, Schema extends StandardSchemaLike 
   run: ValueRunner<Input>;
   seed?: number;
   timeoutMs?: number;
+  variantStrategy?: VariantStrategy;
 };
 
 export type GuidedCoverageReport = {
@@ -181,9 +185,47 @@ class CoverageCollector {
   }
 }
 
+const detectTopLevelVariants = <Input>(options: ValueFuzzOptions<Input>): TypeDescriptor[] | undefined => {
+  const resolved = resolveFuzzData(options);
+  const describeInput = resolveDescribeInput(options.run);
+  const descriptor = resolveInputDescriptor(resolved.valueDescriptor, describeInput);
+  if (descriptor.kind === "union" && descriptor.options.length > 1) {
+    return descriptor.options;
+  }
+  return undefined;
+};
+
+const runUniformVariants = async <Input>(
+  options: ValueFuzzOptions<Input>,
+  variants: TypeDescriptor[],
+): Promise<void> => {
+  const total = options.numRuns ?? 100;
+  const perVariant = Math.max(1, Math.floor(total / variants.length));
+  const baseRun = typeof options.run === "function" ? options.run : options.run.run;
+  for (const variant of variants) {
+    const variantRunner: ValueRunner<Input> = {
+      describeInput: () => variant,
+      run: baseRun,
+    };
+    await fuzzValues<Input>({
+      ...options,
+      numRuns: perVariant,
+      variantStrategy: undefined,
+      run: variantRunner,
+    });
+  }
+};
+
 export const fuzzValues = async <Input = unknown>(
   options: ValueFuzzOptions<Input>,
 ): Promise<void> => {
+  if (options.variantStrategy === "uniform") {
+    const variantsOrUndefined = detectTopLevelVariants(options);
+    if (variantsOrUndefined && variantsOrUndefined.length > 1) {
+      await runUniformVariants(options, variantsOrUndefined);
+      return;
+    }
+  }
   const resolved = resolveFuzzData(options);
   emitFuzzWarnings(resolved.warnings);
   const run = resolveRun(options.run);

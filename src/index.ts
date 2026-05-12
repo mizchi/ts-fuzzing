@@ -128,6 +128,7 @@ export type {
   ValueGuidedFuzzOptions,
   ValueQuickCheckOptions,
   ValueRunner,
+  VariantStrategy,
   SourceOptions,
 } from "./fuzz.js";
 export { schemaSupportFromSchema } from "./schema.js";
