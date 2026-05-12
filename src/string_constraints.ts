@@ -121,6 +121,7 @@ export const domainStringArbitrary = (
         .date({
           min: new Date("1970-01-01T00:00:00.000Z"),
           max: new Date("2099-12-31T23:59:59.999Z"),
+          noInvalidDate: true,
         })
         .map((value) => value.toISOString())
         .filter((value) => filterByLength([value], constraints).length > 0);
