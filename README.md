@@ -16,6 +16,7 @@ Generate values from TypeScript types or schemas, then run quick-checks or fuzzi
 | Mutation | `mutateValue`, `generateMutations` |
 | Statistics | `collectStatistics`, `formatStatistics`, `formatGuidedReport` |
 | Failure tooling | `ValueFuzzError`, `ComponentFuzzError`, `renderReproTest`, `writeReproTest` |
+| Security corpora | `xssPayloads`, `xssCorpus`, `xssPayloadsByCategory`, `XssPayload` (`ts-fuzzing/security`) |
 | Low-level | `analyzeTypeDescriptor`, `analyzePropsDescriptor`, `arbitraryFromDescriptor`, `boundaryValuesFromDescriptor`, `schemaSupportFromSchema` |
 | Marker types | `UUID`, `ULID`, `ISODateString`, `Int`, `Float`, `Min`, `Max`, `MinLength`, `MaxLength`, `MinItems`, `MaxItems`, `Pattern<...>` |
 
@@ -373,6 +374,42 @@ test("doubling is monotonic", async () => {
 });
 ```
 
+### XSS / escape-function fuzzing
+
+`ts-fuzzing/security` ships a curated XSS attack-string corpus for escape, sanitizer, and URL-validator tests. Random strings rarely surface the known XSS bug classes — using a corpus of known-bad payloads lets you assert "this transform survives all of these" without writing the corpus inline.
+
+Opt in per-position with a marker type:
+
+```ts
+import { fuzzValues } from "ts-fuzzing";
+import type { XssPayload } from "ts-fuzzing/security";
+
+export type EscapeInput = {
+  rawText: string & XssPayload;
+  attrValue: string & XssPayload;
+};
+
+await fuzzValues<EscapeInput>({
+  sourcePath: new URL("./escape.ts", import.meta.url),
+  typeName: "EscapeInput",
+  numRuns: 500,
+  run({ rawText, attrValue }) {
+    if (/<\/?script/i.test(escapeHtmlContent(rawText))) throw new Error("html leak");
+    if (/["'>]/.test(escapeHtmlAttribute(attrValue))) throw new Error("attr leak");
+  },
+});
+```
+
+`XssPayload` is just `Pattern<"xss">`, so the same wiring works through JSDoc `@fuzz.pattern xss` annotations.
+
+For one-off cases, the raw arbitrary and corpus are also exported:
+
+```ts
+import { xssCorpus, xssPayloads, xssPayloadsByCategory } from "ts-fuzzing/security";
+```
+
+Categories: `htmlTag`, `attribute`, `url`, `encoding`, `polyglot`, `css`, `template`, `bypass`.
+
 ### Differential testing
 
 `fuzzDifferential` runs two implementations against the same generated input and reports the first divergence.
@@ -454,6 +491,31 @@ try {
 ```
 
 `onIteration` lets you stream each step (e.g. to log every input that was attempted) without collecting the full trace in memory. Pass `stopOnFirstFailure: true` when you only want the first divergence but still need the preceding iterations.
+
+### Guided fuzzing
+
+`fuzzValuesGuided` and `fuzzComponentGuided` keep the same descriptor / schema pipeline as `fuzzValues`, but the search is feedback-driven instead of pure random.
+
+**What "guided" means here.** The guidance signal is V8 precise coverage, collected through `node:inspector` at runtime. After each iteration, ts-fuzzing diffs the executed blocks against everything it has already seen for `sourcePath`. An input that hits a previously-unseen block is kept in an in-memory corpus and mutated to produce the next candidate; an input that adds nothing is discarded. No compiler instrumentation, no source maps, no extra build step.
+
+**When to prefer it over `fuzzValues`.** Reach for guided fuzzing when the target function has internal branches that random sampling rarely hits — parsers, dispatchers, state machines, sanitizers with corpus-sensitive fast paths. For straight-through code where every input takes essentially the same path, plain `fuzzValues` will be faster.
+
+**What it tends to find.** Guided runs surface inputs that exercise rare branches: error paths gated on specific magic values, edge cases in tokenizers, escape sequences a random string generator would only stumble onto. Failures are still reported through `ValueFuzzError`; the attached `report` is a `GuidedCoverageReport` with the discovered corpus size and the list of inputs that unlocked new blocks (use `formatGuidedReport` to render it).
+
+```ts
+import { formatGuidedReport, fuzzValuesGuided } from "ts-fuzzing";
+
+const report = await fuzzValuesGuided({
+  sourcePath: new URL("./parser.ts", import.meta.url),
+  typeName: "ParseInput",
+  maxIterations: 200,
+  corpusPath: new URL("./parser-guided-corpus.json", import.meta.url),
+  run: parse,
+});
+console.log(formatGuidedReport(report));
+```
+
+`corpusPath` persists the discovered corpus between runs so subsequent invocations resume the search. Without it the corpus lives only in memory.
 
 ### Multi-failure collection
 

@@ -19,6 +19,10 @@
     "./svelte": {
       "types": "./dist/svelte.d.ts",
       "default": "./dist/svelte.js"
+    },
+    "./security": {
+      "types": "./dist/security.d.ts",
+      "default": "./dist/security.js"
     }
   },
   "files": [
@@ -29,7 +33,13 @@
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest watch",
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "examples:install": "pnpm -C examples/simple install --frozen-lockfile && pnpm -C examples/react-first install --frozen-lockfile && pnpm -C examples/vue-first install --frozen-lockfile && pnpm -C examples/svelte-first install --frozen-lockfile",
+    "examples:test": "pnpm -C examples/simple test && pnpm -C examples/react-first test && pnpm -C examples/vue-first test && pnpm -C examples/svelte-first test",
+    "examples:typecheck": "pnpm -C examples/simple typecheck && pnpm -C examples/react-first typecheck && pnpm -C examples/vue-first typecheck && pnpm -C examples/svelte-first typecheck",
+    "verify": "pnpm typecheck && pnpm test && pnpm build",
+    "verify:examples": "pnpm examples:typecheck && pnpm examples:test",
+    "verify:all": "pnpm verify && pnpm verify:examples"
   },
   "keywords": [
     "typescript",

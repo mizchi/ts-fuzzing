@@ -15,6 +15,7 @@
     "paths": {
       "ts-fuzzing": ["./src/index.ts"],
       "ts-fuzzing/react": ["./src/react.ts"],
+      "ts-fuzzing/security": ["./src/security.ts"],
       "ts-fuzzing/svelte": ["./src/svelte.ts"],
       "ts-fuzzing/vue": ["./src/vue.ts"]
     },
