@@ -61,6 +61,39 @@ export type MonotonicInvariantOptions<
   mapping: (value: Input) => Output | Promise<Output>;
 };
 
+export type SemigroupInvariantOptions<
+  Input,
+  Schema extends StandardSchemaLike = StandardSchemaLike,
+> = BaseInvariantOptions<Input, Schema> & {
+  equals?: (a: Input, b: Input) => boolean;
+  op: (a: Input, b: Input) => Input | Promise<Input>;
+};
+
+export type MonoidInvariantOptions<
+  Input,
+  Schema extends StandardSchemaLike = StandardSchemaLike,
+> = SemigroupInvariantOptions<Input, Schema> & {
+  identity: Input;
+};
+
+export type CommutativeMonoidInvariantOptions<
+  Input,
+  Schema extends StandardSchemaLike = StandardSchemaLike,
+> = MonoidInvariantOptions<Input, Schema>;
+
+export type FunctorInvariantOptions<
+  Container,
+  A,
+  B,
+  C,
+  Schema extends StandardSchemaLike = StandardSchemaLike,
+> = BaseInvariantOptions<Container, Schema> & {
+  composeFns: [(value: A) => B, (value: B) => C];
+  equals?: (a: Container, b: Container) => boolean;
+  identityFn?: (value: A) => A;
+  map: <X, Y>(container: Container, fn: (value: X) => Y) => Container;
+};
+
 const defaultEquals = <T>(a: T, b: T): boolean => {
   if (Object.is(a, b)) {
     return true;
@@ -314,4 +347,112 @@ export const fuzzMonotonic = async <
     "monotonicity check failed",
     warnings,
   );
+};
+
+export const fuzzSemigroup = async <
+  Input,
+  Schema extends StandardSchemaLike = StandardSchemaLike,
+>(
+  options: SemigroupInvariantOptions<Input, Schema>,
+): Promise<void> => {
+  const { equals = defaultEquals, op, ...rest } = options;
+  await fuzzAssociative<Input, Schema>({
+    ...(rest as AssociativeInvariantOptions<Input, Schema>),
+    equals,
+    operation: op,
+  });
+};
+
+export const fuzzMonoid = async <
+  Input,
+  Schema extends StandardSchemaLike = StandardSchemaLike,
+>(
+  options: MonoidInvariantOptions<Input, Schema>,
+): Promise<void> => {
+  const { equals = defaultEquals, identity, op, ...rest } = options;
+
+  await fuzzSemigroup<Input, Schema>({
+    ...(rest as SemigroupInvariantOptions<Input, Schema>),
+    equals,
+    op,
+  });
+
+  await fuzzValues<Input>({
+    ...(rest as ValueFuzzOptions<Input, Schema>),
+    async run(value) {
+      const left = await op(identity, value);
+      if (!equals(left, value)) {
+        throw new Error(
+          `left identity violated: op(identity, ${formatValue(value)}) = ${formatValue(left)} !== ${formatValue(value)}`,
+        );
+      }
+      const right = await op(value, identity);
+      if (!equals(right, value)) {
+        throw new Error(
+          `right identity violated: op(${formatValue(value)}, identity) = ${formatValue(right)} !== ${formatValue(value)}`,
+        );
+      }
+    },
+  });
+};
+
+export const fuzzCommutativeMonoid = async <
+  Input,
+  Schema extends StandardSchemaLike = StandardSchemaLike,
+>(
+  options: CommutativeMonoidInvariantOptions<Input, Schema>,
+): Promise<void> => {
+  const { equals = defaultEquals, identity, op, ...rest } = options;
+
+  await fuzzMonoid<Input, Schema>({
+    ...(rest as MonoidInvariantOptions<Input, Schema>),
+    equals,
+    identity,
+    op,
+  });
+
+  await fuzzCommutative<Input, Input, Schema>({
+    ...(rest as CommutativeInvariantOptions<Input, Input, Schema>),
+    equals,
+    operation: op,
+  });
+};
+
+export const fuzzFunctor = async <
+  Container,
+  A,
+  B,
+  C,
+  Schema extends StandardSchemaLike = StandardSchemaLike,
+>(
+  options: FunctorInvariantOptions<Container, A, B, C, Schema>,
+): Promise<void> => {
+  const {
+    composeFns,
+    equals = defaultEquals,
+    identityFn = (value: A) => value,
+    map,
+    ...rest
+  } = options;
+  const [f, g] = composeFns;
+
+  await fuzzValues<Container>({
+    ...(rest as ValueFuzzOptions<Container, Schema>),
+    run(container) {
+      const mappedIdentity = map(container, identityFn as never);
+      if (!equals(mappedIdentity, container)) {
+        throw new Error(
+          `functor identity violated: map(id)(${formatValue(container)}) = ${formatValue(mappedIdentity)} !== ${formatValue(container)}`,
+        );
+      }
+
+      const composed = map(container, ((value: A) => g(f(value))) as never);
+      const stepped = map(map(container, f as never), g as never);
+      if (!equals(composed, stepped)) {
+        throw new Error(
+          `functor composition violated: map(g . f)(${formatValue(container)}) = ${formatValue(composed)} !== map(g)(map(f)(...)) = ${formatValue(stepped)}`,
+        );
+      }
+    },
+  });
 };

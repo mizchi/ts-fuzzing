@@ -9,10 +9,14 @@ import type {
 } from "./descriptor.js";
 import { prepareFrameworkSource } from "./framework_source.js";
 
+export type TypeAdapter = TypeDescriptor | (() => TypeDescriptor);
+export type TypeAdapters = Record<string, TypeAdapter>;
+
 type AnalyzeTypeOptions = {
   exportName?: string;
   typeName?: string;
   sourcePath: string;
+  typeAdapters?: TypeAdapters;
 };
 
 type Context = {
@@ -20,7 +24,22 @@ type Context = {
   pending: Set<number>;
   seen: Map<number, TypeDescriptor>;
   substitutions?: Map<number, ts.Type>;
+  typeAdapters?: TypeAdapters;
   warnings: Set<string>;
+};
+
+const resolveTypeAdapter = (
+  adapters: TypeAdapters | undefined,
+  name: string | undefined,
+): TypeDescriptor | undefined => {
+  if (!adapters || !name) {
+    return undefined;
+  }
+  const adapter = adapters[name];
+  if (!adapter) {
+    return undefined;
+  }
+  return typeof adapter === "function" ? adapter() : adapter;
 };
 
 export type AnalyzeTypeResult = {
@@ -251,6 +270,54 @@ const isReactNodeType = (typeText: string) => {
 const getTypeSymbolName = (type: ts.Type) => {
   const aliasSymbol = (type as ts.Type & { aliasSymbol?: ts.Symbol }).aliasSymbol;
   return aliasSymbol?.getName() ?? type.symbol?.getName();
+};
+
+const VALIDATOR_PACKAGES = ["zod", "valibot", "@valibot/", "arktype", "@arktype/"] as const;
+
+const declarationPackage = (declaration: ts.Declaration | undefined): string | undefined => {
+  const fileName = declaration?.getSourceFile().fileName;
+  if (!fileName) {
+    return undefined;
+  }
+  for (const pkg of VALIDATOR_PACKAGES) {
+    if (fileName.includes(`/node_modules/${pkg}`)) {
+      return pkg.replace(/\/$/, "");
+    }
+  }
+  return undefined;
+};
+
+const isValidatorInstanceName = (name: string): boolean => {
+  if (name.startsWith("Zod") && name.length > 3) {
+    return true;
+  }
+  if (name.endsWith("Schema") || name.endsWith("Issue") || name.endsWith("Action")) {
+    return true;
+  }
+  return false;
+};
+
+const detectValidatorInstanceType = (type: ts.Type): string | undefined => {
+  const aliasSymbol = (type as ts.Type & { aliasSymbol?: ts.Symbol }).aliasSymbol;
+  const symbol = type.symbol;
+  if (!symbol) {
+    return undefined;
+  }
+  const symbolName = symbol.getName();
+  if (!isValidatorInstanceName(symbolName)) {
+    return undefined;
+  }
+  const declarations = [
+    ...(symbol.getDeclarations() ?? []),
+    ...(aliasSymbol?.getDeclarations() ?? []),
+  ];
+  for (const declaration of declarations) {
+    const pkg = declarationPackage(declaration);
+    if (pkg) {
+      return pkg;
+    }
+  }
+  return undefined;
 };
 
 const warnGenericFallback = (
@@ -753,10 +820,33 @@ const describeType = (
   const typeSymbolName = getTypeSymbolName(type);
   let descriptor: TypeDescriptor;
 
-  if (isReactNodeType(typeText) || typeSymbolName === "ReactNode") {
+  const adapterMatch =
+    resolveTypeAdapter(context.typeAdapters, typeSymbolName) ??
+    resolveTypeAdapter(context.typeAdapters, typeText);
+  if (adapterMatch) {
+    descriptor = adapterMatch;
+  } else if (isReactNodeType(typeText) || typeSymbolName === "ReactNode") {
     descriptor = { kind: "react-node" };
   } else if (typeSymbolName === "URL" || typeText === "URL") {
     descriptor = { kind: "url" };
+  } else if (typeSymbolName === "Blob" || typeText === "Blob") {
+    descriptor = { kind: "host", host: "blob" };
+  } else if (typeSymbolName === "File" || typeText === "File") {
+    descriptor = { kind: "host", host: "file" };
+  } else if (typeSymbolName === "FormData" || typeText === "FormData") {
+    descriptor = { kind: "host", host: "form-data" };
+  } else if (typeSymbolName === "Headers" || typeText === "Headers") {
+    descriptor = { kind: "host", host: "headers" };
+  } else if (typeSymbolName === "URLSearchParams" || typeText === "URLSearchParams") {
+    descriptor = { kind: "host", host: "url-search-params" };
+  } else if (typeSymbolName === "AbortSignal" || typeText === "AbortSignal") {
+    descriptor = { kind: "host", host: "abort-signal" };
+  } else if (typeSymbolName === "Request" || typeText === "Request") {
+    descriptor = { kind: "host", host: "request" };
+  } else if (typeSymbolName === "Response" || typeText === "Response") {
+    descriptor = { kind: "host", host: "response" };
+  } else if (typeSymbolName === "Event" || typeText === "Event") {
+    descriptor = { kind: "host", host: "event" };
   } else if (typeSymbolName === "Map" || typeSymbolName === "ReadonlyMap") {
     const [keyType, valueType] = context.checker.getTypeArguments(type as ts.TypeReference);
     descriptor = {
@@ -855,6 +945,15 @@ const describeType = (
     );
   } else if (type.getCallSignatures().length > 0) {
     descriptor = { kind: "function" };
+  } else if (detectValidatorInstanceType(type)) {
+    const validatorPackage = detectValidatorInstanceType(type)!;
+    const aliasName = (type as ts.Type & { aliasSymbol?: ts.Symbol }).aliasSymbol?.getName()
+      ?? type.symbol?.getName()
+      ?? typeText;
+    context.warnings.add(
+      `[ts-fuzzing] type "${aliasName}" is a ${validatorPackage} instance type and cannot be fuzzed structurally; pass the schema directly via the "schema" option or annotate the field with the schema's inferred type. falling back to unknown values`,
+    );
+    descriptor = { kind: "unknown" };
   } else {
     const properties = context.checker.getPropertiesOfType(type);
     if (properties.length > 0) {
@@ -1069,6 +1168,7 @@ export const analyzeTypeInfo = (options: AnalyzeTypeOptions): AnalyzeTypeResult 
     checker,
     pending: new Set<number>(),
     seen: new Map<number, TypeDescriptor>(),
+    typeAdapters: options.typeAdapters,
     warnings: new Set<string>(),
   };
   return {

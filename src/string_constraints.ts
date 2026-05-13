@@ -1,6 +1,7 @@
 import fc from "fast-check";
 import type { Arbitrary } from "fast-check";
 import type { FuzzConstraints } from "./descriptor.js";
+import { xssCorpus } from "./security_corpus.js";
 
 const repeated = (char: string, length: number) => char.repeat(Math.max(0, length));
 
@@ -74,6 +75,8 @@ export const domainBoundaryStrings = (constraints: FuzzConstraints | undefined):
         ],
         constraints,
       );
+    case "xss":
+      return filterByLength([...xssCorpus], constraints);
     default:
       return undefined;
   }
@@ -118,8 +121,13 @@ export const domainStringArbitrary = (
         .date({
           min: new Date("1970-01-01T00:00:00.000Z"),
           max: new Date("2099-12-31T23:59:59.999Z"),
+          noInvalidDate: true,
         })
         .map((value) => value.toISOString())
+        .filter((value) => filterByLength([value], constraints).length > 0);
+    case "xss":
+      return fc
+        .constantFrom(...xssCorpus)
         .filter((value) => filterByLength([value], constraints).length > 0);
     default:
       return undefined;
@@ -149,7 +157,8 @@ export const regexBoundaryStrings = (constraints: FuzzConstraints | undefined): 
     constraints.pattern === "url" ||
     constraints.pattern === "uuid" ||
     constraints.pattern === "ulid" ||
-    constraints.pattern === "iso-date"
+    constraints.pattern === "iso-date" ||
+    constraints.pattern === "xss"
   ) {
     return [];
   }

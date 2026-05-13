@@ -1,8 +1,10 @@
 export { analyzePropsDescriptor, analyzeTypeDescriptor } from "./analyzer.js";
+export type { TypeAdapter, TypeAdapters } from "./analyzer.js";
 export { arbitraryFromDescriptor } from "./arbitrary.js";
 export { boundaryValuesFromDescriptor } from "./boundary.js";
 export type {
   FuzzConstraints,
+  HostType,
   ObjectDescriptor,
   PropertyDescriptor,
   TypeDescriptor,
@@ -33,16 +35,20 @@ export {
   formatStatistics,
   fuzzAssociative,
   fuzzCommutative,
+  fuzzCommutativeMonoid,
   fuzzComponent,
   fuzzComponentGuided,
   fuzzDifferential,
   fuzzFromCorpus,
   fuzzFromCorpusWithMutation,
+  fuzzFunctor,
   generateMutations,
   mutateValue,
   fuzzIdempotent,
+  fuzzMonoid,
   fuzzMonotonic,
   fuzzRoundtrip,
+  fuzzSemigroup,
   fuzzStateful,
   fuzzValues,
   fuzzValuesGuided,
@@ -66,6 +72,7 @@ export {
   samplePropsFromSchema,
   sampleProps,
   saveCorpus,
+  shrinkValue,
   writeReproTest,
 } from "./fuzz.js";
 export type {
@@ -75,6 +82,9 @@ export type {
   AssociativeInvariantOptions,
   ClassifyFn,
   CommutativeInvariantOptions,
+  CoercionMode,
+  NullInjectionMode,
+  CommutativeMonoidInvariantOptions,
   ComponentRenderStrategy,
   CorpusFailure,
   CorpusLocation,
@@ -84,6 +94,7 @@ export type {
   DifferentialFuzzOptions,
   FuzzFromCorpusOptions,
   FuzzFromCorpusWithMutationOptions,
+  FunctorInvariantOptions,
   GenerateMutationsOptions,
   MutateValueOptions,
   ProgressEvent,
@@ -93,6 +104,7 @@ export type {
   GuidedCoverageReport,
   IdempotentInvariantOptions,
   InputDescriptorTransform,
+  MonoidInvariantOptions,
   MonotonicInvariantOptions,
   MultiFailure,
   QuickCheckReport,
@@ -104,7 +116,10 @@ export type {
   ReproWriteOptions,
   ResolvedFuzzData,
   RoundtripInvariantOptions,
+  ShrinkValueOptions,
+  ShrinkValueResult,
   SchemaOptions,
+  SemigroupInvariantOptions,
   StatisticsBucket,
   StatisticsOptions,
   StatisticsReport,
@@ -117,7 +132,10 @@ export type {
   ValueGuidedFuzzOptions,
   ValueQuickCheckOptions,
   ValueRunner,
+  VariantStrategy,
   SourceOptions,
 } from "./fuzz.js";
+export { pickPaths, rebuildFrom } from "./projection.js";
+export type { ProjectFuzz } from "./projection.js";
 export { schemaSupportFromSchema } from "./schema.js";
 export type { StandardSchemaLike } from "./schema.js";

@@ -1,7 +1,7 @@
 import { fileURLToPath } from "node:url";
 import type { StandardSchemaV1 } from "@standard-schema/spec";
 import fc from "fast-check";
-import { analyzeTypeInfo } from "./analyzer.js";
+import { analyzeTypeInfo, type TypeAdapters } from "./analyzer.js";
 import { arbitraryFromDescriptor } from "./arbitrary.js";
 import { boundaryValuesFromDescriptor } from "./boundary.js";
 import type { TypeDescriptor } from "./descriptor.js";
@@ -15,6 +15,7 @@ export type SourceOptions = {
   sourcePath?: string | URL;
   exportName?: string;
   typeName?: string;
+  typeAdapters?: TypeAdapters;
 };
 
 export type SchemaOptions<Schema extends StandardSchemaLike = StandardSchemaLike> = {
@@ -69,6 +70,7 @@ export const resolveFuzzData = (
       exportName: options.exportName,
       typeName: options.typeName,
       sourcePath: normalizedPath,
+      typeAdapters: options.typeAdapters,
     });
     return {
       componentDescriptor: analyzed.descriptor,

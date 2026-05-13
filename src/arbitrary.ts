@@ -1,6 +1,7 @@
 import fc from "fast-check";
 import type { Arbitrary } from "fast-check";
 import type { ObjectDescriptor, TypeDescriptor } from "./descriptor.js";
+import { hostArbitrary } from "./host_types.js";
 import { domainStringArbitrary } from "./string_constraints.js";
 
 const boundedInteger = (min: number | undefined, max: number | undefined) => {
@@ -94,6 +95,8 @@ export const arbitraryFromDescriptor = (descriptor: TypeDescriptor): Arbitrary<u
       const domainArbitrary = domainStringArbitrary({ pattern: "url" });
       return (domainArbitrary ?? fc.webUrl()).map((value) => new URL(value));
     }
+    case "host":
+      return hostArbitrary(descriptor.host);
     case "map":
       return fc
         .array(fc.tuple(arbitraryFromDescriptor(descriptor.key), arbitraryFromDescriptor(descriptor.value)), {

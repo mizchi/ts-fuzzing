@@ -270,6 +270,51 @@ export const Button = (_props: ButtonProps) => null;`,
     );
   });
 
+  test("warns when validator instance types are used as plain TypeScript types", () => {
+    const resolved = resolveFuzzData({
+      sourcePath: fileURLToPath(new URL("./fixtures/ValidatorTypes.ts", import.meta.url)),
+      typeName: "ZodInstance",
+    });
+
+    expect(resolved.valueDescriptor).toMatchObject({ kind: "unknown" });
+    expect(resolved.warnings).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining("zod instance type"),
+      ]),
+    );
+  });
+
+  test("warns for valibot schema instance types", () => {
+    const resolved = resolveFuzzData({
+      sourcePath: fileURLToPath(new URL("./fixtures/ValidatorTypes.ts", import.meta.url)),
+      typeName: "ValibotInstance",
+    });
+
+    expect(resolved.valueDescriptor).toMatchObject({ kind: "unknown" });
+    expect(resolved.warnings).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining("valibot instance type"),
+      ]),
+    );
+  });
+
+  test("zod inferred types still describe normally", () => {
+    const resolved = resolveFuzzData({
+      sourcePath: fileURLToPath(new URL("./fixtures/ValidatorTypes.ts", import.meta.url)),
+      typeName: "ZodInferredObject",
+    });
+
+    expect(resolved.valueDescriptor.kind).toBe("object");
+    if (resolved.valueDescriptor.kind !== "object") {
+      throw new Error("expected object descriptor");
+    }
+    const properties = Object.fromEntries(
+      resolved.valueDescriptor.properties.map((property) => [property.key, property]),
+    );
+    expect(properties.name?.optional).toBe(false);
+    expect(properties.name?.value.kind).toBe("string");
+  });
+
   test("normalizes common external runtime types", () => {
     const descriptor = analyzeTypeDescriptor({
       sourcePath: fileURLToPath(new URL("./fixtures/ExternalTypes.ts", import.meta.url)),

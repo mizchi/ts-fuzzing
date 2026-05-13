@@ -2,7 +2,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import fc from "fast-check";
-import type { FuzzConstraints, ObjectDescriptor, TypeDescriptor } from "./descriptor.js";
+import type { FuzzConstraints, HostType, ObjectDescriptor, TypeDescriptor } from "./descriptor.js";
+import { hostArbitrary } from "./host_types.js";
 import { domainBoundaryStrings, regexBoundaryStrings } from "./string_constraints.js";
 
 export type SerializedValue =
@@ -265,6 +266,8 @@ export const generateValue = (descriptor: TypeDescriptor, rng: DeterministicRng)
       return rng.pick([null, rng.bool(), rng.int(-10, 10), generateString({ maxLength: 16 }, rng)]);
     case "url":
       return new URL(generateString({ pattern: "url", minLength: 1 }, rng));
+    case "host":
+      return fc.sample(hostArbitrary(descriptor.host), { numRuns: 1, seed: rng.int(0, 2_147_483_647) })[0];
     case "map": {
       const length = rng.int(0, 4);
       return new Map(
@@ -310,6 +313,31 @@ export const generateValue = (descriptor: TypeDescriptor, rng: DeterministicRng)
   }
 };
 
+const matchesHost = (value: unknown, host: HostType): boolean => {
+  switch (host) {
+    case "blob":
+      return typeof Blob !== "undefined" && value instanceof Blob;
+    case "file":
+      return typeof File !== "undefined" && value instanceof File;
+    case "form-data":
+      return typeof FormData !== "undefined" && value instanceof FormData;
+    case "headers":
+      return typeof Headers !== "undefined" && value instanceof Headers;
+    case "url-search-params":
+      return typeof URLSearchParams !== "undefined" && value instanceof URLSearchParams;
+    case "abort-signal":
+      return typeof AbortSignal !== "undefined" && value instanceof AbortSignal;
+    case "request":
+      return typeof Request !== "undefined" && value instanceof Request;
+    case "response":
+      return typeof Response !== "undefined" && value instanceof Response;
+    case "event":
+      return typeof Event !== "undefined" && value instanceof Event;
+    default:
+      return false;
+  }
+};
+
 export const matchesDescriptor = (value: unknown, descriptor: TypeDescriptor): boolean => {
   switch (descriptor.kind) {
     case "unknown":
@@ -332,6 +360,8 @@ export const matchesDescriptor = (value: unknown, descriptor: TypeDescriptor): b
       return value === null || ["string", "number", "boolean"].includes(typeof value);
     case "url":
       return value instanceof URL;
+    case "host":
+      return matchesHost(value, descriptor.host);
     case "map":
       return value instanceof Map;
     case "set":
@@ -441,6 +471,8 @@ export const mutateValue = (
     case "react-node":
       return generateValue(descriptor, rng);
     case "url":
+      return generateValue(descriptor, rng);
+    case "host":
       return generateValue(descriptor, rng);
     case "map": {
       const currentMap = current instanceof Map ? new Map(current) : new Map();

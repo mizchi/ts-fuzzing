@@ -10,13 +10,15 @@ Generate values from TypeScript types or schemas, then run quick-checks or fuzzi
 | Property-based fuzzing | `fuzzValues`, `quickCheckValues`, `fuzzValuesGuided`, `fuzzValuesMulti`, `replayValues`, `replayFromError` |
 | Component fuzzing | `fuzzComponent`, `quickCheckComponent`, `fuzzComponentGuided`, `fuzzReactComponent` (`ts-fuzzing/react`), `createVueDomRender` (`ts-fuzzing/vue`), `createSvelteRender` (`ts-fuzzing/svelte`) |
 | Invariant helpers | `fuzzRoundtrip`, `fuzzIdempotent`, `fuzzCommutative`, `fuzzAssociative`, `fuzzMonotonic` |
+| Algebraic bundles | `fuzzSemigroup`, `fuzzMonoid`, `fuzzCommutativeMonoid`, `fuzzFunctor` |
 | Stateful / sequence | `fuzzStateful`, `StatefulFuzzError` |
 | Differential | `fuzzDifferential` |
 | Corpus / regression | `loadCorpus`, `saveCorpus`, `appendToCorpus`, `fuzzFromCorpus`, `fuzzFromCorpusWithMutation` |
 | Mutation | `mutateValue`, `generateMutations` |
 | Statistics | `collectStatistics`, `formatStatistics`, `formatGuidedReport` |
 | Failure tooling | `ValueFuzzError`, `ComponentFuzzError`, `renderReproTest`, `writeReproTest` |
-| Low-level | `analyzeTypeDescriptor`, `analyzePropsDescriptor`, `arbitraryFromDescriptor`, `boundaryValuesFromDescriptor`, `schemaSupportFromSchema` |
+| Security corpora | `xssPayloads`, `xssCorpus`, `xssPayloadsByCategory`, `XssPayload` (`ts-fuzzing/security`) |
+| Low-level | `analyzeTypeDescriptor`, `analyzePropsDescriptor`, `arbitraryFromDescriptor`, `boundaryValuesFromDescriptor`, `schemaSupportFromSchema`, `shrinkValue`, `pickPaths`, `rebuildFrom` |
 | Marker types | `UUID`, `ULID`, `ISODateString`, `Int`, `Float`, `Min`, `Max`, `MinLength`, `MaxLength`, `MinItems`, `MaxItems`, `Pattern<...>` |
 
 ## Install
@@ -373,6 +375,191 @@ test("doubling is monotonic", async () => {
 });
 ```
 
+### Algebraic invariant bundles
+
+`fuzzSemigroup`, `fuzzMonoid`, `fuzzCommutativeMonoid`, and `fuzzFunctor` bundle the underlying property checks (associativity, identity, commutativity, functor laws) so a single call asserts a complete algebraic structure rather than three separate calls.
+
+```ts
+import { fuzzCommutativeMonoid, fuzzMonoid, fuzzSemigroup } from "ts-fuzzing";
+
+// associativity only
+await fuzzSemigroup({ schema, op: concat });
+
+// associativity + left/right identity
+await fuzzMonoid({ schema, op: merge, identity: empty });
+
+// monoid + commutativity
+await fuzzCommutativeMonoid({ schema, op: union, identity: { items: [] } });
+```
+
+`fuzzFunctor` asserts both functor laws (`map(id) === id` and `map(g ∘ f) === map(g) ∘ map(f)`) against a container type plus its `map` operation:
+
+```ts
+import { fuzzFunctor } from "ts-fuzzing";
+
+await fuzzFunctor<Option<number>, number, number, number>({
+  schema: optionSchema,
+  map: Option.map,
+  composeFns: [(x) => x + 1, (x) => x * 2],
+});
+```
+
+Each helper accepts an `equals?: (a, b) => boolean` for custom structural equality. The default falls back to `Object.is` then `JSON.stringify`.
+
+### XSS / escape-function fuzzing
+
+`ts-fuzzing/security` ships a curated XSS attack-string corpus for escape, sanitizer, and URL-validator tests. Random strings rarely surface the known XSS bug classes — using a corpus of known-bad payloads lets you assert "this transform survives all of these" without writing the corpus inline.
+
+Opt in per-position with a marker type:
+
+```ts
+import { fuzzValues } from "ts-fuzzing";
+import type { XssPayload } from "ts-fuzzing/security";
+
+export type EscapeInput = {
+  rawText: string & XssPayload;
+  attrValue: string & XssPayload;
+};
+
+await fuzzValues<EscapeInput>({
+  sourcePath: new URL("./escape.ts", import.meta.url),
+  typeName: "EscapeInput",
+  numRuns: 500,
+  run({ rawText, attrValue }) {
+    if (/<\/?script/i.test(escapeHtmlContent(rawText))) throw new Error("html leak");
+    if (/["'>]/.test(escapeHtmlAttribute(attrValue))) throw new Error("attr leak");
+  },
+});
+```
+
+`XssPayload` is just `Pattern<"xss">`, so the same wiring works through JSDoc `@fuzz.pattern xss` annotations.
+
+For one-off cases, the raw arbitrary and corpus are also exported:
+
+```ts
+import { xssCorpus, xssPayloads, xssPayloadsByCategory } from "ts-fuzzing/security";
+```
+
+Categories: `htmlTag`, `attribute`, `url`, `encoding`, `polyglot`, `css`, `template`, `bypass`.
+
+### Null / undefined injection control
+
+By default, `null` and `undefined` are only generated at positions where the TypeScript type allows them (`T | null`, `T | undefined`, optional fields). `nullInjection` switches between three modes:
+
+| Mode | Behavior |
+| --- | --- |
+| `"respect-type"` (default) | Inject only where the type allows |
+| `"never"` | Strip every nullable / optional branch — focus on the value path |
+| `"aggressive"` | Add `null` / `undefined` everywhere, surfacing defensive-coding gaps in consumers |
+
+```ts
+await fuzzValues<Input>({
+  sourcePath,
+  typeName: "Input",
+  nullInjection: "aggressive",
+  run(value) {
+    // a `.map(...)` here will throw if value.items got `null` or `undefined`
+    consume(value);
+  },
+});
+```
+
+Aggressive mode is best with TypeScript-typed sources where there is no runtime validation gate; schema sources will still reject values that fail the schema's normalizer.
+
+### Falsy-aware coercion mode
+
+JavaScript code routinely uses truthy / falsy coercion (`if (x)`, `x ?? y`, `x || z`) on values that TypeScript declares as `boolean`. A consumer that meets a `""`, `0`, or `undefined` at runtime can silently take the wrong branch even though the type system says it cannot happen.
+
+Set `coercion: "falsy-aware"` to widen `boolean` positions to a curated set (`true`, `false`, `0`, `""`, `null`, `undefined`, `"0"`, `"false"`, `" "`). The value is still typed as `boolean` to the runner — that is intentional, since the bug class is "what happens when this value is not really a boolean at runtime".
+
+```ts
+import { fuzzValues } from "ts-fuzzing";
+
+await fuzzValues<{ enabled: boolean }>({
+  sourcePath: new URL("./toggle.ts", import.meta.url),
+  typeName: "ToggleInput",
+  numRuns: 200,
+  coercion: "falsy-aware",
+  run({ enabled }) {
+    renderToggle(enabled);
+  },
+});
+```
+
+The widening applies to every `boolean` position reached by walking the descriptor tree (objects, arrays, tuples, unions, maps, and sets). Schema sources still apply their normalizers, so falsy-aware mode is most useful with a TypeScript source path where there is no runtime validation gate.
+
+### Shrinking failing values
+
+`shrinkValue` walks a failing value and tries structurally smaller candidates — shorter arrays, fewer object keys, smaller strings, numbers moving toward zero — keeping any that still fail under the same failure signature. Use it when a fuzz failure carries a large value and you want a minimal repro to commit or share.
+
+```ts
+import { shrinkValue, ValueFuzzError, fuzzValues } from "ts-fuzzing";
+
+try {
+  await fuzzValues<Input>({ sourcePath, typeName: "Input", run: consume });
+} catch (error) {
+  if (error instanceof ValueFuzzError) {
+    const result = await shrinkValue<Input>({
+      sourcePath,
+      typeName: "Input",
+      value: error.failingValue as Input,
+      run: consume,
+    });
+    console.log("minimized:", result.minimizedValue);
+    console.log("attempts:", result.attempts);
+  }
+  throw error;
+}
+```
+
+The shrinker accepts `failureSignature?: (cause) => string` so different exceptions don't get "shrunk into" each other, and `maxAttempts` / `timeoutMs` as CI safety nets.
+
+### Shape projection
+
+`ProjectFuzz<T, Paths>` derives a flat fuzz-input type by selecting dot-paths from a deeply nested target type. The runtime helpers `pickPaths` and `rebuildFrom` round-trip values between the full shape and the projection so a fuzz test exercises only the fields the test cares about.
+
+```ts
+import type { ProjectFuzz } from "ts-fuzzing";
+import { pickPaths, rebuildFrom, fuzzValues } from "ts-fuzzing";
+
+type TextNode = {
+  uuid: string;
+  value: { uuid: string; text: string; classes: string[] };
+};
+
+type TextFuzzInput = ProjectFuzz<TextNode, "value.uuid" | "value.text" | "value.classes">;
+
+const paths = ["value.uuid", "value.text", "value.classes"] as const;
+
+await fuzzValues<TextFuzzInput>({
+  sourcePath,
+  typeName: "TextFuzzInput",
+  run(input) {
+    const node = rebuildFrom(input, defaultNode, paths);
+    visit(node);
+  },
+});
+
+// pickPaths preserves the projected type when paths are passed `as const`:
+// type Projection = typeof projection;  // → { value: { uuid: string; text: string; classes: string[] } }
+const projection = pickPaths(fullNode, paths);
+```
+
+### Custom type adapters
+
+For opaque external types (SDK class instances, branded runtime wrappers, validator instance types), `typeAdapters` overrides how a specific symbol is described — supply a descriptor directly or a factory that returns one. The same option flows through `analyzeTypeDescriptor`, `resolveFuzzData`, `fuzzValues`, and friends.
+
+```ts
+import { fuzzValues, type TypeAdapters } from "ts-fuzzing";
+
+const adapters: TypeAdapters = {
+  Decimal: { kind: "number", integer: false, constraints: { min: 0, max: 1_000 } },
+  ObjectId: () => ({ kind: "string", constraints: { pattern: "^[a-f0-9]{24}$" } }),
+};
+
+await fuzzValues({ sourcePath, typeName: "Input", typeAdapters: adapters, run });
+```
+
 ### Differential testing
 
 `fuzzDifferential` runs two implementations against the same generated input and reports the first divergence.
@@ -454,6 +641,31 @@ try {
 ```
 
 `onIteration` lets you stream each step (e.g. to log every input that was attempted) without collecting the full trace in memory. Pass `stopOnFirstFailure: true` when you only want the first divergence but still need the preceding iterations.
+
+### Guided fuzzing
+
+`fuzzValuesGuided` and `fuzzComponentGuided` keep the same descriptor / schema pipeline as `fuzzValues`, but the search is feedback-driven instead of pure random.
+
+**What "guided" means here.** The guidance signal is V8 precise coverage, collected through `node:inspector` at runtime. After each iteration, ts-fuzzing diffs the executed blocks against everything it has already seen for `sourcePath`. An input that hits a previously-unseen block is kept in an in-memory corpus and mutated to produce the next candidate; an input that adds nothing is discarded. No compiler instrumentation, no source maps, no extra build step.
+
+**When to prefer it over `fuzzValues`.** Reach for guided fuzzing when the target function has internal branches that random sampling rarely hits — parsers, dispatchers, state machines, sanitizers with corpus-sensitive fast paths. For straight-through code where every input takes essentially the same path, plain `fuzzValues` will be faster.
+
+**What it tends to find.** Guided runs surface inputs that exercise rare branches: error paths gated on specific magic values, edge cases in tokenizers, escape sequences a random string generator would only stumble onto. Failures are still reported through `ValueFuzzError`; the attached `report` is a `GuidedCoverageReport` with the discovered corpus size and the list of inputs that unlocked new blocks (use `formatGuidedReport` to render it).
+
+```ts
+import { formatGuidedReport, fuzzValuesGuided } from "ts-fuzzing";
+
+const report = await fuzzValuesGuided({
+  sourcePath: new URL("./parser.ts", import.meta.url),
+  typeName: "ParseInput",
+  maxIterations: 200,
+  corpusPath: new URL("./parser-guided-corpus.json", import.meta.url),
+  run: parse,
+});
+console.log(formatGuidedReport(report));
+```
+
+`corpusPath` persists the discovered corpus between runs so subsequent invocations resume the search. Without it the corpus lives only in memory.
 
 ### Multi-failure collection
 
@@ -631,6 +843,7 @@ await fuzzValues({
 ## Examples and Docs
 
 - Runnable non-UI example: [examples/simple/README.md](./examples/simple/README.md)
+- Runnable schema-first example: [examples/schema-first/README.md](./examples/schema-first/README.md)
 - Runnable React adapter example: [examples/react-first/README.md](./examples/react-first/README.md)
 - Runnable Vue adapter example: [examples/vue-first/README.md](./examples/vue-first/README.md)
 - Runnable Svelte adapter example: [examples/svelte-first/README.md](./examples/svelte-first/README.md)

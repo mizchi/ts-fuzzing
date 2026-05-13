@@ -1,4 +1,5 @@
 import type { ObjectDescriptor, TypeDescriptor } from "./descriptor.js";
+import { hostBoundaryValues } from "./host_types.js";
 import {
   domainBoundaryStrings,
   genericBoundaryStrings,
@@ -127,6 +128,8 @@ export const boundaryValuesFromDescriptor = (
         new URL("https://example.com/"),
         new URL("http://localhost/"),
       ].slice(0, maxCases);
+    case "host":
+      return hostBoundaryValues(descriptor.host).slice(0, maxCases);
     case "map": {
       const keys = boundaryValuesFromDescriptor(descriptor.key, 2);
       const values = boundaryValuesFromDescriptor(descriptor.value, 2);

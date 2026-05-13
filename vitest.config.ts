@@ -19,6 +19,10 @@ export default defineConfig({
         replacement: fileURLToPath(new URL("./src/react.ts", import.meta.url)),
       },
       {
+        find: /^ts-fuzzing\/security$/,
+        replacement: fileURLToPath(new URL("./src/security.ts", import.meta.url)),
+      },
+      {
         find: /^ts-fuzzing\/svelte$/,
         replacement: fileURLToPath(new URL("./src/svelte.ts", import.meta.url)),
       },

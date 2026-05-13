@@ -2,6 +2,8 @@ import inspector from "node:inspector";
 import { fileURLToPath } from "node:url";
 import fc from "fast-check";
 import { arbitraryFromDescriptor } from "./arbitrary.js";
+import { applyCoercion, applyNullInjection, type CoercionMode, type NullInjectionMode } from "./coercion.js";
+import type { TypeDescriptor } from "./descriptor.js";
 import {
   coverageKeysForTarget,
   DeterministicRng,
@@ -31,12 +33,17 @@ export type ValueRunner<Input = unknown> =
       run: (input: Input) => unknown | Promise<unknown>;
     };
 
+export type VariantStrategy = "weighted" | "uniform";
+
 export type ValueFuzzOptions<Input = unknown, Schema extends StandardSchemaLike = StandardSchemaLike> = SourceOptions & SchemaOptions<Schema> & ProgressOptions & {
+  coercion?: CoercionMode;
+  nullInjection?: NullInjectionMode;
   numRuns?: number;
   perRunTimeoutMs?: number;
   run: ValueRunner<Input>;
   seed?: number;
   timeoutMs?: number;
+  variantStrategy?: VariantStrategy;
 };
 
 export type GuidedCoverageReport = {
@@ -63,6 +70,8 @@ export type QuickCheckReport = {
 };
 
 export type ValueGuidedFuzzOptions<Input = unknown, Schema extends StandardSchemaLike = StandardSchemaLike> = SourceOptions & SchemaOptions<Schema> & ProgressOptions & {
+  coercion?: CoercionMode;
+  nullInjection?: NullInjectionMode;
   corpusPath?: string | URL;
   initialCorpusSize?: number;
   maxIterations?: number;
@@ -71,6 +80,8 @@ export type ValueGuidedFuzzOptions<Input = unknown, Schema extends StandardSchem
 };
 
 export type ValueQuickCheckOptions<Input = unknown, Schema extends StandardSchemaLike = StandardSchemaLike> = SourceOptions & SchemaOptions<Schema> & ProgressOptions & {
+  coercion?: CoercionMode;
+  nullInjection?: NullInjectionMode;
   maxCases?: number;
   run: ValueRunner<Input>;
 };
@@ -174,16 +185,61 @@ class CoverageCollector {
   }
 }
 
+const detectTopLevelVariants = <Input>(options: ValueFuzzOptions<Input>): TypeDescriptor[] | undefined => {
+  const resolved = resolveFuzzData(options);
+  const describeInput = resolveDescribeInput(options.run);
+  const descriptor = resolveInputDescriptor(resolved.valueDescriptor, describeInput);
+  if (descriptor.kind === "union" && descriptor.options.length > 1) {
+    return descriptor.options;
+  }
+  return undefined;
+};
+
+const runUniformVariants = async <Input>(
+  options: ValueFuzzOptions<Input>,
+  variants: TypeDescriptor[],
+): Promise<void> => {
+  const total = options.numRuns ?? 100;
+  const perVariant = Math.max(1, Math.floor(total / variants.length));
+  const baseRun = typeof options.run === "function" ? options.run : options.run.run;
+  for (const variant of variants) {
+    const variantRunner: ValueRunner<Input> = {
+      describeInput: () => variant,
+      run: baseRun,
+    };
+    await fuzzValues<Input>({
+      ...options,
+      numRuns: perVariant,
+      variantStrategy: undefined,
+      run: variantRunner,
+    });
+  }
+};
+
 export const fuzzValues = async <Input = unknown>(
   options: ValueFuzzOptions<Input>,
 ): Promise<void> => {
+  if (options.variantStrategy === "uniform") {
+    const variantsOrUndefined = detectTopLevelVariants(options);
+    if (variantsOrUndefined && variantsOrUndefined.length > 1) {
+      await runUniformVariants(options, variantsOrUndefined);
+      return;
+    }
+  }
   const resolved = resolveFuzzData(options);
   emitFuzzWarnings(resolved.warnings);
   const run = resolveRun(options.run);
   const describeInput = resolveDescribeInput(options.run);
-  const inputDescriptor = resolveInputDescriptor(resolved.valueDescriptor, describeInput);
+  const inputDescriptor = applyNullInjection(
+    applyCoercion(
+      resolveInputDescriptor(resolved.valueDescriptor, describeInput),
+      options.coercion,
+    ),
+    options.nullInjection,
+  );
+  const skipSchemaPreFilter = options.coercion === "falsy-aware" || options.nullInjection !== undefined;
   const arbitrary = (
-    resolved.schemaSupport
+    resolved.schemaSupport && !skipSchemaPreFilter
       ? arbitraryFromDescriptor(inputDescriptor).filter((value) => resolved.schemaSupport!.normalizeSync(value).ok)
       : arbitraryFromDescriptor(inputDescriptor)
   ) as fc.Arbitrary<unknown>;
@@ -239,7 +295,13 @@ export const fuzzValuesGuided = async <Input = unknown>(
   emitFuzzWarnings(resolved.warnings);
   const run = resolveRun(options.run);
   const describeInput = resolveDescribeInput(options.run);
-  const inputDescriptor = resolveInputDescriptor(resolved.valueDescriptor, describeInput);
+  const inputDescriptor = applyNullInjection(
+    applyCoercion(
+      resolveInputDescriptor(resolved.valueDescriptor, describeInput),
+      options.coercion,
+    ),
+    options.nullInjection,
+  );
   const rng = new DeterministicRng(options.seed ?? 1);
   const collector = new CoverageCollector();
   const initialCorpusSize = options.initialCorpusSize ?? 8;
@@ -363,7 +425,15 @@ export const quickCheckValues = async <Input = unknown>(
   const resolved = resolveFuzzData(options);
   emitFuzzWarnings(resolved.warnings);
   const run = resolveRun(options.run);
-  const describeInput = resolveDescribeInput(options.run);
+  const baseDescribeInput = resolveDescribeInput(options.run);
+  const needsTransform = options.coercion === "falsy-aware" || options.nullInjection !== undefined;
+  const describeInput: InputDescriptorTransform | undefined = needsTransform
+    ? (descriptor) =>
+        applyNullInjection(
+          applyCoercion(baseDescribeInput ? baseDescribeInput(descriptor) : descriptor, options.coercion),
+          options.nullInjection,
+        )
+    : baseDescribeInput;
   const cases: unknown[] = [];
   for await (const value of sampleBoundaryFuzzData(resolved, {
     describeInput,
