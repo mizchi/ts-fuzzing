@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import ts from "typescript";
 import type {
   FuzzConstraints,
@@ -15,8 +16,28 @@ export type TypeAdapters = Record<string, TypeAdapter>;
 type AnalyzeTypeOptions = {
   exportName?: string;
   typeName?: string;
-  sourcePath: string;
+  sourcePath: string | URL;
+  /**
+   * Path to a specific tsconfig.json to use when type-checking the source.
+   * If omitted, the analyzer walks up from the source file to find the
+   * nearest tsconfig.json. Pass an isolated tsconfig (or `false`) when the
+   * project tsconfig produces errors unrelated to the source file.
+   */
+  tsconfigPath?: string | URL | false;
   typeAdapters?: TypeAdapters;
+};
+
+const toFilePath = (value: string | URL): string => {
+  if (value instanceof URL) {
+    if (value.protocol !== "file:") {
+      throw new TypeError(
+        `expected a file: URL or string path, received ${value.protocol}//${value.host}${value.pathname}. ` +
+          "Pass a plain string path (e.g. via path.join or url.fileURLToPath) when running outside a node-like test environment.",
+      );
+    }
+    return fileURLToPath(value);
+  }
+  return value;
 };
 
 type Context = {
@@ -79,37 +100,75 @@ const findNearestTsconfig = (startDir: string): string | undefined => {
   }
 };
 
-const parseConfig = (sourcePath: string) => {
-  const tsconfigPath = findNearestTsconfig(path.dirname(sourcePath));
-  if (!tsconfigPath) {
-    return {
-      fileNames: [sourcePath],
-      options: DEFAULT_CONFIG_OPTIONS,
-    };
+type ParseConfigResult = {
+  options: ts.CompilerOptions;
+  warnings: string[];
+};
+
+const parseConfig = (
+  sourcePath: string,
+  explicitTsconfigPath: string | false | undefined,
+): ParseConfigResult => {
+  if (explicitTsconfigPath === false) {
+    return { options: DEFAULT_CONFIG_OPTIONS, warnings: [] };
   }
 
+  const tsconfigPath =
+    explicitTsconfigPath ?? findNearestTsconfig(path.dirname(sourcePath));
+  if (!tsconfigPath) {
+    return { options: DEFAULT_CONFIG_OPTIONS, warnings: [] };
+  }
+
+  if (explicitTsconfigPath && !fs.existsSync(tsconfigPath)) {
+    throw new Error(`tsconfig not found: ${tsconfigPath}`);
+  }
+
+  const fatalDiagnostics: ts.Diagnostic[] = [];
   const host: ts.ParseConfigFileHost = {
     ...ts.sys,
     onUnRecoverableConfigFileDiagnostic: (diagnostic) => {
-      throw new Error(formatDiagnostics([diagnostic]));
+      fatalDiagnostics.push(diagnostic);
     },
   };
 
   const parsed = ts.getParsedCommandLineOfConfigFile(tsconfigPath, {}, host);
-  if (!parsed) {
-    throw new Error(`failed to parse tsconfig: ${tsconfigPath}`);
+  if (!parsed || fatalDiagnostics.length > 0) {
+    if (explicitTsconfigPath) {
+      const message =
+        fatalDiagnostics.length > 0
+          ? formatDiagnostics(fatalDiagnostics)
+          : `failed to parse tsconfig: ${tsconfigPath}`;
+      throw new Error(message);
+    }
+    return {
+      options: DEFAULT_CONFIG_OPTIONS,
+      warnings: [
+        `nearest tsconfig (${tsconfigPath}) could not be parsed; falling back to default compiler options. Pass tsconfigPath: false or an explicit tsconfigPath to silence this.`,
+      ],
+    };
   }
 
-  const fileNames = parsed.fileNames.includes(sourcePath)
-    ? parsed.fileNames
-    : [...parsed.fileNames, sourcePath];
+  const configErrors = (parsed.errors ?? []).filter(
+    (diagnostic) => diagnostic.category === ts.DiagnosticCategory.Error,
+  );
+  if (configErrors.length > 0 && !explicitTsconfigPath) {
+    return {
+      options: DEFAULT_CONFIG_OPTIONS,
+      warnings: [
+        `nearest tsconfig (${tsconfigPath}) produced ${configErrors.length} error(s); falling back to default compiler options. Pass tsconfigPath: false or an explicit tsconfigPath to silence this.`,
+      ],
+    };
+  }
+  if (configErrors.length > 0 && explicitTsconfigPath) {
+    throw new Error(formatDiagnostics(configErrors));
+  }
 
   return {
-    fileNames,
     options: {
       ...DEFAULT_CONFIG_OPTIONS,
       ...parsed.options,
     },
+    warnings: [],
   };
 };
 
@@ -1133,29 +1192,50 @@ const findTargetType = (
 };
 
 export const analyzeTypeInfo = (options: AnalyzeTypeOptions): AnalyzeTypeResult => {
-  const sourcePath = path.resolve(options.sourcePath);
+  const sourcePath = path.resolve(toFilePath(options.sourcePath));
   const preparedSource = prepareFrameworkSource(sourcePath);
   const programSourcePath = preparedSource?.virtualPath ?? sourcePath;
-  const { fileNames, options: compilerOptions } = parseConfig(programSourcePath);
-  const rootNames = fileNames.includes(programSourcePath)
-    ? fileNames
-    : [...fileNames, programSourcePath];
-  const program = createProgram(rootNames, compilerOptions, preparedSource?.virtualPath && preparedSource.virtualSourceText
-    ? {
-        path: preparedSource.virtualPath,
-        sourceText: preparedSource.virtualSourceText,
-      }
-    : undefined);
-
-  const diagnostics = ts.getPreEmitDiagnostics(program);
-  const hardErrors = diagnostics.filter((diagnostic) => diagnostic.category === ts.DiagnosticCategory.Error);
-  if (hardErrors.length > 0) {
-    throw new Error(formatDiagnostics(hardErrors));
-  }
+  const explicitTsconfigPath =
+    options.tsconfigPath === false
+      ? false
+      : options.tsconfigPath
+        ? path.resolve(toFilePath(options.tsconfigPath))
+        : undefined;
+  const { options: compilerOptions, warnings: configWarnings } = parseConfig(
+    programSourcePath,
+    explicitTsconfigPath,
+  );
+  const program = createProgram(
+    [programSourcePath],
+    compilerOptions,
+    preparedSource?.virtualPath && preparedSource.virtualSourceText
+      ? {
+          path: preparedSource.virtualPath,
+          sourceText: preparedSource.virtualSourceText,
+        }
+      : undefined,
+  );
 
   const sourceFile = program.getSourceFile(programSourcePath);
   if (!sourceFile) {
     throw new Error(`source file not found: ${programSourcePath}`);
+  }
+
+  // Only report hard errors that originate in the source file itself.
+  // Errors in unrelated project files (e.g. surfaced by walking the
+  // nearest tsconfig) should not block analysis of a small type stub.
+  const sourceFileName = sourceFile.fileName;
+  const sourceFileDiagnostics = [
+    ...program.getSyntacticDiagnostics(sourceFile),
+    ...program.getSemanticDiagnostics(sourceFile),
+  ];
+  const hardErrors = sourceFileDiagnostics.filter(
+    (diagnostic) =>
+      diagnostic.category === ts.DiagnosticCategory.Error &&
+      (diagnostic.file?.fileName === sourceFileName || diagnostic.file === undefined),
+  );
+  if (hardErrors.length > 0) {
+    throw new Error(formatDiagnostics(hardErrors));
   }
 
   const checker = program.getTypeChecker();
@@ -1169,7 +1249,7 @@ export const analyzeTypeInfo = (options: AnalyzeTypeOptions): AnalyzeTypeResult 
     pending: new Set<number>(),
     seen: new Map<number, TypeDescriptor>(),
     typeAdapters: options.typeAdapters,
-    warnings: new Set<string>(),
+    warnings: new Set<string>(configWarnings),
   };
   return {
     descriptor: describeType(targetType, sourceFile, context),
@@ -1184,13 +1264,17 @@ export const analyzeTypeDescriptor = (options: AnalyzeTypeOptions): TypeDescript
 export const analyzePropsDescriptor = (options: {
   exportName?: string;
   typeName?: string;
-  sourcePath: string;
+  sourcePath: string | URL;
+  tsconfigPath?: string | URL | false;
+  typeAdapters?: TypeAdapters;
 }): TypeDescriptor => {
   try {
     return analyzeTypeDescriptor({
       exportName: options.exportName,
       typeName: options.typeName,
       sourcePath: options.sourcePath,
+      tsconfigPath: options.tsconfigPath,
+      typeAdapters: options.typeAdapters,
     });
   } catch (error) {
     if (!(error instanceof Error)) {

@@ -15,6 +15,14 @@ export type SourceOptions = {
   sourcePath?: string | URL;
   exportName?: string;
   typeName?: string;
+  /**
+   * Path to a specific tsconfig.json to use when analyzing the source.
+   * When omitted, ts-fuzzing walks up from the source file to find the
+   * nearest tsconfig.json — pass `false` to skip discovery, or pass an
+   * isolated tsconfig path when the project tsconfig produces errors
+   * unrelated to the source file.
+   */
+  tsconfigPath?: string | URL | false;
   typeAdapters?: TypeAdapters;
 };
 
@@ -44,6 +52,12 @@ type SourceBackedOptions = SourceOptions & {
 
 const normalizePath = (sourcePath: string | URL) => {
   if (sourcePath instanceof URL) {
+    if (sourcePath.protocol !== "file:") {
+      throw new TypeError(
+        `sourcePath URL must use file: scheme (received ${sourcePath.protocol}//${sourcePath.host}${sourcePath.pathname}). ` +
+          "In non-Node environments (happy-dom, jsdom, browsers) prefer a plain string path, e.g. path.join(__dirname, \"./types.ts\").",
+      );
+    }
     return fileURLToPath(sourcePath);
   }
   return sourcePath;
@@ -70,6 +84,7 @@ export const resolveFuzzData = (
       exportName: options.exportName,
       typeName: options.typeName,
       sourcePath: normalizedPath,
+      tsconfigPath: options.tsconfigPath,
       typeAdapters: options.typeAdapters,
     });
     return {
