@@ -71,6 +71,18 @@ describe("generic value fuzzing", () => {
     });
   });
 
+  test("ValueFuzzError.failingValueString preserves non-JSON-safe fields", () => {
+    const error = new ValueFuzzError("boom", {
+      cause: new Error("inner"),
+      failingValue: { big: 9n, sym: Symbol("k"), missing: undefined, broken: Number.NaN },
+    });
+    const str = error.failingValueString;
+    expect(str).toContain("9n");
+    expect(str).toContain("Symbol(k)");
+    expect(str).toContain("undefined");
+    expect(str).toContain("NaN");
+  });
+
   test("supports guided fuzzing for generic consumers", async () => {
     const report = await fuzzValuesGuided({
       schema: z.object({

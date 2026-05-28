@@ -567,4 +567,108 @@ export const PrimitiveProps = (_props: Props) => null;`,
       }),
     ).toThrow(/TS\d+|Declaration or statement expected|Expression expected/);
   });
+
+  test("ignores errors in unrelated project files when analyzing a stub", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ts-fuzzing-analyzer-"));
+    tempDirs.push(dir);
+    fs.writeFileSync(
+      path.join(dir, "tsconfig.json"),
+      JSON.stringify({
+        compilerOptions: {
+          target: "ES2024",
+          module: "NodeNext",
+          moduleResolution: "NodeNext",
+          strict: true,
+        },
+        include: ["*.ts", "*.tsx"],
+      }),
+    );
+    // This file has a real TS error but is unrelated to the source we analyze.
+    fs.writeFileSync(
+      path.join(dir, "broken.ts"),
+      `export const broken: string = 42;`,
+    );
+    const stubPath = path.join(dir, "stub.ts");
+    fs.writeFileSync(
+      stubPath,
+      `export type Input = { id: string; count?: number };`,
+    );
+
+    const descriptor = analyzeTypeDescriptor({
+      typeName: "Input",
+      sourcePath: stubPath,
+    });
+    expect(descriptor.kind).toBe("object");
+  });
+
+  test("falls back to default tsconfig when the project tsconfig has fatal errors", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ts-fuzzing-analyzer-"));
+    tempDirs.push(dir);
+    fs.writeFileSync(
+      path.join(dir, "tsconfig.json"),
+      JSON.stringify({ compilerOptions: { target: "ES3" } }),
+    );
+    const stubPath = path.join(dir, "stub.ts");
+    fs.writeFileSync(
+      stubPath,
+      `export type Input = { id: string };`,
+    );
+
+    const descriptor = analyzeTypeDescriptor({
+      typeName: "Input",
+      sourcePath: stubPath,
+    });
+    expect(descriptor.kind).toBe("object");
+  });
+
+  test("accepts a URL for sourcePath", () => {
+    const filePath = writeTempFile(
+      "ViaURL.ts",
+      `export type Input = { id: string };`,
+    );
+    const descriptor = analyzeTypeDescriptor({
+      typeName: "Input",
+      sourcePath: new URL(`file://${filePath}`),
+    });
+    expect(descriptor.kind).toBe("object");
+  });
+
+  test("accepts an explicit tsconfigPath", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ts-fuzzing-analyzer-"));
+    tempDirs.push(dir);
+    const tsconfigPath = path.join(dir, "tsconfig.fuzz.json");
+    fs.writeFileSync(
+      tsconfigPath,
+      JSON.stringify({
+        compilerOptions: {
+          target: "ES2024",
+          module: "NodeNext",
+          moduleResolution: "NodeNext",
+          strict: false,
+        },
+      }),
+    );
+    const stubPath = path.join(dir, "stub.ts");
+    fs.writeFileSync(stubPath, `export type Input = { id: string };`);
+
+    const descriptor = analyzeTypeDescriptor({
+      typeName: "Input",
+      sourcePath: stubPath,
+      tsconfigPath,
+    });
+    expect(descriptor.kind).toBe("object");
+  });
+
+  test("tsconfigPath: false skips project tsconfig discovery", () => {
+    const filePath = writeTempFile(
+      "Stub.ts",
+      `export type Input = { id: string };`,
+    );
+    const descriptor = analyzeTypeDescriptor({
+      typeName: "Input",
+      sourcePath: filePath,
+      tsconfigPath: false,
+    });
+    expect(descriptor.kind).toBe("object");
+  });
 });

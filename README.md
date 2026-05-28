@@ -42,6 +42,11 @@ pnpm add vue
 pnpm add svelte
 ```
 
+`sourcePath` accepts both a plain string path and a `file:` URL. A plain string
+(e.g. `path.join(__dirname, "./types.ts")`) is the safest choice — in
+non-Node test environments (happy-dom, jsdom, browsers) `import.meta.url`
+resolves to an `http:` URL rather than a `file:` URL.
+
 ## Quick Start
 
 Use exported TypeScript types as the source of truth, then run a generic consumer callback with generated values.
@@ -70,6 +75,19 @@ test("fuzzes a callback with values generated from a TypeScript type", async () 
   ).resolves.toBeUndefined();
 });
 ```
+
+**A note on what gets generated.** ts-fuzzing biases toward inputs that probe
+defensive checks on the *boundary* of the declared type, not strictly
+conforming inputs only. Generated values may therefore violate some
+declared invariants — e.g. a `Record<string, T>` field may be sampled as
+`null`, a non-optional field may surface as `undefined`. This is intentional:
+the goal is to surface "the type says X but the runtime trusts Y" bugs. If
+you only want strictly type-conforming samples, prefer `sampleValues` /
+`sampleBoundaryValues` and reject before calling your code.
+
+`numRuns` defaults to **100** for `fuzzValues` / `sampleValues` /
+`fuzzValuesGuided`. Set it explicitly when you want a tighter or looser
+budget.
 
 Failures throw `ValueFuzzError`.
 
@@ -543,6 +561,64 @@ await fuzzValues<TextFuzzInput>({
 // pickPaths preserves the projected type when paths are passed `as const`:
 // type Projection = typeof projection;  // → { value: { uuid: string; text: string; classes: string[] } }
 const projection = pickPaths(fullNode, paths);
+```
+
+### Project integration (`tsconfigPath`)
+
+ts-fuzzing analyzes types through the TypeScript compiler. By default it
+walks up from the source file to find the nearest `tsconfig.json` and
+borrows its compiler options (so `paths`, `baseUrl`, and JSX settings just
+work). If that tsconfig is fatally misconfigured (e.g. `target: "ES3"` on
+TS 5.x), ts-fuzzing automatically falls back to safe defaults and emits a
+warning rather than failing the run.
+
+Errors from *unrelated* project files are filtered out — only type errors
+that originate in the file under analysis fail the run. This means a
+5-line `Input` type stub does not need to type-check the whole project.
+
+For full control, pass `tsconfigPath` explicitly:
+
+```ts
+await fuzzValues({
+  sourcePath: path.join(__dirname, "./types.ts"),
+  typeName: "Input",
+  tsconfigPath: path.join(__dirname, "./tsconfig.fuzz.json"),
+  run,
+});
+
+// Or skip tsconfig discovery entirely:
+await fuzzValues({
+  sourcePath: path.join(__dirname, "./types.ts"),
+  typeName: "Input",
+  tsconfigPath: false,
+  run,
+});
+```
+
+A common pattern for projects with strict or legacy root tsconfigs is to
+keep an isolated tsconfig alongside the fuzz target:
+
+```
+src/fuzz/
+├── loadTemplate.fuzz.types.ts
+├── loadTemplate.fuzz.test.ts
+└── tsconfig.json    # { compilerOptions: { target: "ES2024", strict: false }, include: ["*.ts"] }
+```
+
+### Reproducing failing values
+
+`ValueFuzzError.failingValue` holds the literal failing input. For
+printable output, prefer `error.failingValueString` (uses `util.inspect`)
+over `JSON.stringify`, which silently drops `BigInt`, `Symbol`,
+`undefined`, `NaN`, Map/Set, and circular references — exactly the values
+fuzzing tends to find.
+
+```ts
+} catch (error) {
+  if (error instanceof ValueFuzzError) {
+    console.error(`seed=${error.seed} value=${error.failingValueString}`);
+  }
+}
 ```
 
 ### Custom type adapters

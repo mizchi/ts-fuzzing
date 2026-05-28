@@ -1,5 +1,6 @@
 import inspector from "node:inspector";
 import { fileURLToPath } from "node:url";
+import { inspect } from "node:util";
 import fc from "fast-check";
 import { arbitraryFromDescriptor } from "./arbitrary.js";
 import { applyCoercion, applyNullInjection, type CoercionMode, type NullInjectionMode } from "./coercion.js";
@@ -38,6 +39,10 @@ export type VariantStrategy = "weighted" | "uniform";
 export type ValueFuzzOptions<Input = unknown, Schema extends StandardSchemaLike = StandardSchemaLike> = SourceOptions & SchemaOptions<Schema> & ProgressOptions & {
   coercion?: CoercionMode;
   nullInjection?: NullInjectionMode;
+  /**
+   * Number of fuzz iterations to run. Defaults to `100`.
+   * Each iteration generates one value and invokes `run` with it.
+   */
   numRuns?: number;
   perRunTimeoutMs?: number;
   run: ValueRunner<Input>;
@@ -107,6 +112,22 @@ export class ValueFuzzError extends Error {
     this.report = options.report;
     this.seed = options.seed;
     this.warnings = options.warnings ?? [];
+  }
+
+  /**
+   * Faithful printable representation of `failingValue`. Uses `util.inspect`
+   * so `BigInt`, `Symbol`, `undefined`, `NaN`, Map/Set, and circular
+   * references survive — unlike `JSON.stringify`, which silently drops
+   * those values and breaks local reproduction.
+   */
+  get failingValueString(): string {
+    return inspect(this.failingValue, {
+      breakLength: Infinity,
+      compact: true,
+      depth: Infinity,
+      maxArrayLength: Infinity,
+      maxStringLength: Infinity,
+    });
   }
 }
 
